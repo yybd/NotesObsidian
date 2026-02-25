@@ -38,7 +38,10 @@ class SearchService {
 
         return results.map((result) => ({
             note: result.item,
-            matches: result.matches || [],
+            matches: (result.matches || []).map(m => ({
+                key: m.key || '',
+                indices: m.indices.map(i => [...i]),
+            })),
             score: result.score || 0,
         }));
     }

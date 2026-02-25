@@ -1,0 +1,22 @@
+{
+    "name": "local-file-bookmark",
+    "version": "1.0.0",
+    "description": "Security-scoped file bookmarks for iOS persistent folder access",
+    "main": "src/index.ts",
+    "types": "src/index.ts",
+    "scripts": {
+        "build": "expo-module build"
+    },
+    "keywords": [
+        "expo",
+        "ios",
+        "bookmark",
+        "security-scoped"
+    ],
+    "peerDependencies": {
+        "expo": "*",
+        "expo-modules-core": "*"
+    },
+    "author": "Obsidian Notes",
+    "license": "MIT"
+}

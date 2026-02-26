@@ -1,5 +1,5 @@
 import React, { forwardRef, useImperativeHandle, useRef, useMemo } from 'react';
-import { StyleSheet, TextInputProps, Platform, StyleProp, TextStyle } from 'react-native';
+import { StyleSheet, TextInputProps, Platform, StyleProp, TextStyle, TextInput } from 'react-native';
 import { MarkdownTextInput, parseExpensiMark } from '@expensify/react-native-live-markdown';
 import { getDirection, rtlTextStyle } from '../utils/rtlUtils';
 
@@ -41,7 +41,7 @@ export const NativeLiveEditor = forwardRef<NativeLiveEditorRef, NativeLiveEditor
         if (initialContent !== lastPropContent.current) {
             lastPropContent.current = initialContent;
             if (initialContent !== contentRef.current) {
-                // This is a programmatic change — update the native text
+                // var is external
                 isExternalUpdate.current = true;
                 contentRef.current = initialContent;
                 // Schedule native update after render
@@ -56,21 +56,27 @@ export const NativeLiveEditor = forwardRef<NativeLiveEditorRef, NativeLiveEditor
         useImperativeHandle(ref, () => ({
             getMarkdown: async () => contentRef.current,
             focus: () => {
+                console.log(`[NativeLiveEditor] Imperative focus triggered`);
                 textInputRef.current?.focus();
             },
             blur: () => {
                 textInputRef.current?.blur();
             },
             setSelection: (sel: { start: number; end: number }) => {
+                console.log(`[NativeLiveEditor] Imperative setSelection to:`, sel);
                 textInputRef.current?.setNativeProps({ selection: sel });
             },
             setText: (text: string) => {
+                isExternalUpdate.current = true;
                 contentRef.current = text;
                 textInputRef.current?.setNativeProps({ text });
+                setTimeout(() => { isExternalUpdate.current = false; }, 0);
             },
             setTextAndSelection: (text: string, sel: { start: number; end: number }) => {
+                isExternalUpdate.current = true;
                 contentRef.current = text;
                 textInputRef.current?.setNativeProps({ text, selection: sel });
+                setTimeout(() => { isExternalUpdate.current = false; }, 0);
             },
             insertText: (text: string) => {
                 const newContent = contentRef.current + text;
@@ -81,7 +87,7 @@ export const NativeLiveEditor = forwardRef<NativeLiveEditorRef, NativeLiveEditor
                     textInputRef.current?.focus();
                 }, 50);
             }
-        }));
+        }), []);
 
         const handleChangeText = (text: string) => {
             // Only notify parent if this is a user-initiated change (not our programmatic update)

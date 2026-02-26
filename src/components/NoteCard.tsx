@@ -1,7 +1,7 @@
 // NoteCard.tsx - Expandable inline note card
 // Tap to expand/view, Long press to edit, auto-save on blur
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -22,8 +22,9 @@ import { Note, DOMAINS, DomainType } from '../types/Note';
 import FrontmatterService, { getContentWithoutFrontmatter, updateFrontmatter, removeFrontmatterKey } from '../services/FrontmatterService';
 import { DomainSelector } from './DomainSelector';
 import { UnifiedMarkdownDisplay } from './UnifiedMarkdownDisplay';
-import { NativeLiveEditor, NativeLiveEditorRef } from './NativeLiveEditor';
+import { SmartEditor, SmartEditorRef } from './SmartEditor';
 import { getDirection, RTL_TEXT_STYLE } from '../utils/rtlUtils';
+import { handleListContinuation, toggleCheckboxByIndex } from '../utils/markdownUtils';
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -36,14 +37,17 @@ interface NoteCardProps {
     onUpdate: (content: string) => void;
     onDismissKeyboard?: () => void;
     onSync?: () => void;
-    onEditStart?: (inputRef: React.RefObject<TextInput | null>, content: string, selection: { start: number; end: number }) => void;
+    onEditStart?: (instance: SmartEditorRef | null, content: string, selection: { start: number; end: number }) => void;
     onEditEnd?: () => void;
     onEditContentChange?: (content: string) => void;
     onEditSelectionChange?: (selection: { start: number; end: number }) => void;
+    onStatusChange?: (actions: string[]) => void;
     externalEditContent?: string; // Content controlled by parent (for toolbar updates)
+    externalIsPinned?: boolean; // Pinned state controlled by parent
     maxEditHeight?: number; // Dynamic max height for editor, calculated by parent
     autoEdit?: boolean; // Start in edit mode immediately
     forceExitEdit?: boolean; // Force exit edit mode (when another card starts editing)
+    onEditRequest?: () => void; // Request external editing instead of inline
     style?: StyleProp<ViewStyle>;
 }
 
@@ -64,31 +68,76 @@ const stripMarkdown = (text: string): string => {
         .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
 };
 
-export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onDismissKeyboard, onSync, onEditStart, onEditEnd, onEditContentChange, onEditSelectionChange, externalEditContent, maxEditHeight, autoEdit, forceExitEdit, style }) => {
+export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onDismissKeyboard, onSync, onEditStart, onEditEnd, onEditContentChange, onEditSelectionChange, onStatusChange, externalEditContent, externalIsPinned, maxEditHeight, autoEdit, forceExitEdit, onEditRequest, style }) => {
     // Parse content upfront for autoEdit mode
     const initialParsed = autoEdit ? FrontmatterService.parseFrontmatter(note.content) : null;
 
     const [isExpanded, setIsExpanded] = useState(!!autoEdit);
     const [isEditing, setIsEditing] = useState(!!autoEdit);
-    const [editBody, setEditBody] = useState(initialParsed?.body || '');
+    const [editBody, setEditBodyState] = useState(initialParsed?.body || '');
+    const lastProcessedTextRef = useRef(initialParsed?.body || '');
     const [editFrontmatter, setEditFrontmatter] = useState<Record<string, any>>(initialParsed?.frontmatter || {});
     const [editSelection, setEditSelection] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
     const [showDomainSelector, setShowDomainSelector] = useState(false);
     const [isPinned, setIsPinned] = useState(!!note.pinned);
 
-    // We replace TextInput ref with NativeLiveEditorRef
-    const editorRef = useRef<NativeLiveEditorRef>(null);
+    // Custom setter for editBody to also update lastProcessedTextRef
+    const setEditBody = (newBody: string) => {
+        setEditBodyState(newBody);
+        lastProcessedTextRef.current = newBody;
+    };
 
-    // Sync pinned state and keep editFrontmatter synced with external pin toggles
+    // We replace TextInput ref with SmartEditorRef
+    const editorRef = useRef<SmartEditorRef>(null);
+
+    // Stable ref callback - prevents inline arrow function from being recreated on every render,
+    // which was causing onEditStart to fire on every re-render → infinite loop.
+    const handleEditorRef = useCallback((ref: SmartEditorRef | null) => {
+        editorRef.current = ref;
+    }, []);
+
+    // Notify parent when editing starts (runs once when isEditing becomes true)
+    // intentionally excludes onEditStart from deps to avoid calling it on every parent re-render
+    useEffect(() => {
+        if (isEditing && editorRef.current) {
+            onEditStart?.(editorRef.current, editBody, editSelection);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isEditing]);
+
+    // Ref flag: set to true when we just entered edit mode, cleared after focus is applied.
+    // This prevents handlePress from exiting edit mode on the same gesture as the long-press,
+    // and drives the onLayout-based focus mechanism (no arbitrary timeout needed).
+    const pendingFocusRef = useRef(false);
+    const editStartedRef = useRef(false);
+
+    // Sync pinned state and keep editFrontmatter synced with external pin toggles (e.g search updates)
     useEffect(() => {
         setIsPinned(!!note.pinned);
         setEditFrontmatter(prev => ({ ...prev, pinned: note.pinned, domain: note.domain }));
     }, [note.pinned, note.domain]);
 
+    // Sync external pinned state from parent toolbar
+    useEffect(() => {
+        if (isEditing && externalIsPinned !== undefined && externalIsPinned !== isPinned) {
+            setIsPinned(externalIsPinned);
+            setEditFrontmatter(prev => {
+                const newFm = { ...prev };
+                if (externalIsPinned) {
+                    newFm.pinned = true;
+                } else {
+                    delete newFm.pinned;
+                }
+                return newFm;
+            });
+        }
+    }, [externalIsPinned]);
+
     // Sync external content changes from parent toolbar
     useEffect(() => {
         if (isEditing && externalEditContent !== undefined && externalEditContent !== editBody) {
             setEditBody(externalEditContent);
+            lastProcessedTextRef.current = externalEditContent;
         }
     }, [externalEditContent]);
 
@@ -129,18 +178,34 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
 
     // Handle tap - expand/collapse view
     const handlePress = () => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        if (isEditing) {
-            // Save and exit edit mode
-            handleBlur();
-        } else {
-            setIsExpanded(!isExpanded);
+        // Guard: if we JUST entered edit mode via long-press, ignore this tap.
+        // On some devices/RN versions, onPress fires after onLongPress on finger lift.
+        if (editStartedRef.current) {
+            editStartedRef.current = false;
+            return;
         }
+        
+        if (isEditing) {
+            // Do not close the editor when tapping inside the card
+            // This allows the user to tap the text freely to move the cursor
+            return;
+        }
+
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setIsExpanded(!isExpanded);
     };
 
     // Handle long press - enter edit mode
     const handleLongPress = () => {
+        if (onEditRequest) {
+            onEditRequest();
+            return;
+        }
+
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+
+        editStartedRef.current = true;   // Guard against handlePress firing after
+        pendingFocusRef.current = true;  // Will be consumed by onLayout
 
         setIsExpanded(true);
         setIsEditing(true);
@@ -150,13 +215,8 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
         setEditBody(parsed.body);
         setEditFrontmatter(parsed.frontmatter);
 
-        const len = parsed.body.length;
-        const initialSelection = { start: len, end: len };
+        const initialSelection = { start: 0, end: 0 };
         setEditSelection(initialSelection);
-        onEditStart?.(editorRef as any, parsed.body, initialSelection);
-        setTimeout(() => {
-            editorRef.current?.focus();
-        }, 100);
     };
 
     // Handle blur - save and exit
@@ -171,13 +231,25 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
         onEditEnd?.(); // Notify end of editing
     };
 
-    // Handle done button - save, dismiss keyboard, return focus to quick note
     const handleDone = () => {
         Keyboard.dismiss();
-        const fullContent = FrontmatterService.composeContent(editFrontmatter, editBody);
-        if (isEditing && fullContent !== note.content) {
+
+        // Ensure the absolute latest pin state is applied to the frontmatter
+        // before composing the content, avoiding any useEffect async timing issues
+        const finalFrontmatter = { ...editFrontmatter };
+        if (isPinned) {
+            finalFrontmatter.pinned = true;
+        } else {
+            delete finalFrontmatter.pinned;
+        }
+
+        const fullContent = FrontmatterService.composeContent(finalFrontmatter, editBody);
+
+        // Always update if the pin state changed from original, even if strings somehow match
+        if (isEditing && (fullContent !== note.content || isPinned !== !!note.pinned)) {
             onUpdate(fullContent);
         }
+
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setIsEditing(false);
         setIsExpanded(false);
@@ -188,12 +260,6 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
 
     const hasChecklist = /\[[ x]\]/i.test(note.content);
 
-    // Debug log for checklist detection
-    useEffect(() => {
-        if (isExpanded) {
-            console.log('NoteCard Expanded:', { id: note.id, hasChecklist, contentPrefix: note.content.substring(0, 40) });
-        }
-    }, [isExpanded, hasChecklist]);
 
     // Force exit edit mode when another card starts editing
     useEffect(() => {
@@ -211,18 +277,17 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
     // Auto-edit mode: trigger edit on mount
     useEffect(() => {
         if (autoEdit) {
+            pendingFocusRef.current = true;
             const parsed = FrontmatterService.parseFrontmatter(note.content);
             setEditBody(parsed.body);
+            lastProcessedTextRef.current = parsed.body;
             setEditFrontmatter(parsed.frontmatter);
-            const len = parsed.body.length;
-            const initialSelection = { start: len, end: len };
+            const initialSelection = { start: 0, end: 0 };
             setEditSelection(initialSelection);
-            onEditStart?.(editorRef as any, parsed.body, initialSelection);
-            setTimeout(() => {
-                editorRef.current?.focus();
-            }, 100);
         }
-    }, []);
+    }, [autoEdit, note.content]);
+
+    // Notify parent of editor readiness - NO-OP now replaced by ref callback
 
     const handleQuickAdd = () => {
         // Find the last occurrence of a checklist item to append after it
@@ -254,18 +319,15 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
         const initialSelection = { start: contentLen, end: contentLen };
 
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        pendingFocusRef.current = true;
         setEditBody(newBody);
+        lastProcessedTextRef.current = newBody;
         setIsExpanded(true);
         setIsEditing(true);
         setEditSelection(initialSelection);
 
         // Notify parent about the change
         onEditContentChange?.(newBody);
-
-        // Required timeout to wait for the Editor to be rendered in edit mode
-        setTimeout(() => {
-            editorRef.current?.focus();
-        }, 150);
     };
 
     const handleDeleteCompleted = () => {
@@ -295,80 +357,26 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
     };
 
     const handleTextChangeWithListContinuation = (newText: string) => {
-        const oldText = editBody;
+        const result = handleListContinuation(newText, lastProcessedTextRef.current);
 
-        // Check if user just pressed Enter (newline was added)
-        if (newText.length > oldText.length && newText.includes('\n')) {
-            const addedChar = newText.substring(oldText.length);
+        if (result) {
+            lastProcessedTextRef.current = result.modifiedText;
+            setEditBody(result.modifiedText);
+            onEditContentChange?.(result.modifiedText);
 
-            // Only process if a newline was just added
-            if (addedChar === '\n' || addedChar.includes('\n')) {
-                // Find the line before the cursor (where Enter was pressed)
-                const cursorPos = newText.lastIndexOf('\n', newText.length - 1);
-                const lineStart = newText.lastIndexOf('\n', cursorPos - 1) + 1;
-                const previousLine = newText.substring(lineStart, cursorPos);
-
-                // Check for checkbox pattern: "- [ ] " or "- [x] "
-                const checkboxMatch = previousLine.match(/^(\s*- \[[ xX]\] )/);
-                if (checkboxMatch) {
-                    // If the line only has the checkbox (empty content), remove it and don't continue
-                    const lineContent = previousLine.substring(checkboxMatch[0].length).trim();
-                    if (!lineContent) {
-                        // Remove the empty checkbox line and the newline
-                        const cleanedText = newText.substring(0, lineStart) + newText.substring(cursorPos + 1);
-                        setEditBody(cleanedText);
-                        onEditContentChange?.(cleanedText);
-                        return;
-                    }
-                    // Add unchecked checkbox to new line
-                    const prefix = '- [ ] ';
-                    const modifiedText = newText.substring(0, cursorPos + 1) + prefix + newText.substring(cursorPos + 1);
-                    setEditBody(modifiedText);
-                    onEditContentChange?.(modifiedText);
-
-                    // Set cursor position after the prefix
-                    const newPos = cursorPos + 1 + prefix.length;
-                    setTimeout(() => {
-                        const newSelection = { start: newPos, end: newPos };
-                        setEditSelection(newSelection);
-                        onEditSelectionChange?.(newSelection);
-                    }, 50);
-                    return;
-                }
-
-                // Check for list pattern: "- "
-                const listMatch = previousLine.match(/^(\s*- )/);
-                if (listMatch) {
-                    // If the line only has the list marker (empty content), remove it and don't continue
-                    const lineContent = previousLine.substring(listMatch[0].length).trim();
-                    if (!lineContent) {
-                        // Remove the empty list line and the newline
-                        const cleanedText = newText.substring(0, lineStart) + newText.substring(cursorPos + 1);
-                        setEditBody(cleanedText);
-                        onEditContentChange?.(cleanedText);
-                        return;
-                    }
-                    // Add list marker to new line
-                    const prefix = '- ';
-                    const modifiedText = newText.substring(0, cursorPos + 1) + prefix + newText.substring(cursorPos + 1);
-                    setEditBody(modifiedText);
-                    onEditContentChange?.(modifiedText);
-
-                    // Set cursor position after the prefix
-                    const newPos = cursorPos + 1 + prefix.length;
-                    setTimeout(() => {
-                        const newSelection = { start: newPos, end: newPos };
-                        setEditSelection(newSelection);
-                        onEditSelectionChange?.(newSelection);
-                    }, 50);
-                    return;
-                }
+            if (result.cursorShouldMove) {
+                const newSelection = { start: result.newCursorPos, end: result.newCursorPos };
+                setEditSelection(newSelection);
+                onEditSelectionChange?.(newSelection);
+                editorRef.current?.setTextAndSelection?.(result.modifiedText, newSelection);
+            } else {
+                editorRef.current?.setText?.(result.modifiedText);
             }
+        } else {
+            lastProcessedTextRef.current = newText;
+            setEditBody(newText);
+            onEditContentChange?.(newText);
         }
-
-        // No list continuation needed
-        setEditBody(newText);
-        onEditContentChange?.(newText);
     };
 
     return (
@@ -392,6 +400,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
                         <TouchableOpacity
                             onPress={() => isEditing && setShowDomainSelector(!showDomainSelector)}
                             disabled={!isEditing}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                             style={[
                                 styles.domainChip,
                                 note.domain && DOMAINS[note.domain] ? {
@@ -443,11 +452,10 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
 
                 <View style={styles.headerRight}>
                     {isEditing && (
-                        <TouchableOpacity onPress={handleDone} style={styles.doneButton}>
-                            <Ionicons name="checkmark-circle" size={24} color="#6200EE" />
+                        <TouchableOpacity onPress={handleDone} style={styles.doneButton} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+                            <Ionicons name="checkmark-circle" size={32} color="#6200EE" />
                         </TouchableOpacity>
                     )}
-                    <View style={[styles.syncIndicator, { backgroundColor: syncStatusColor }]} />
                 </View>
             </View>
 
@@ -476,21 +484,31 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
             {/* Content - view or edit mode */}
             {isEditing ? (
                 <View
-                    style={{ maxHeight: maxEditHeight || 400, flex: 1 }}
+                    style={[{ flex: 1 }, maxEditHeight ? { maxHeight: maxEditHeight } : {}]}
+                    onLayout={() => {
+                        // Event-driven focus: fires when the editor container
+                        // is actually laid out — works regardless of device speed.
+                        if (pendingFocusRef.current) {
+                            pendingFocusRef.current = false;
+                            editorRef.current?.focus();
+                        }
+                    }}
                 >
-                    <NativeLiveEditor
-                        ref={editorRef}
+                    <SmartEditor
+                        ref={handleEditorRef}
                         initialContent={editBody}
-                        onChange={handleTextChangeWithListContinuation}
                         selection={editSelection}
-                        onSelectionChange={(e) => {
+                        onChange={handleTextChangeWithListContinuation}
+                        onSelectionChange={(e: any) => {
                             const newSelection = e.nativeEvent.selection;
                             setEditSelection(newSelection);
                             onEditSelectionChange?.(newSelection);
                         }}
-                        style={{ minHeight: 80 }}
-                        contentInset={{ bottom: 60 }}
-                        scrollIndicatorInsets={{ bottom: 60 }}
+                        onStatusChange={onStatusChange}
+                        autoFocus={autoEdit}
+                        style={{ flex: 1, minHeight: 80 }}
+                        contentInset={{ bottom: 0 }}
+                        scrollIndicatorInsets={{ bottom: 0 }}
                     />
                 </View>
             ) : (
@@ -506,49 +524,10 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
                         <UnifiedMarkdownDisplay
                             content={bodyContent}
                             onToggleCheckbox={isExpanded && !isEditing ? (index) => {
-                                // Delegate checkbox toggles to parent through onUpdate if not editing
-                                const handleToggleCheckboxLocally = (checklistIndexTarget: number) => {
-                                    const lines = note.content.split('\n');
-                                    let currentChecklistIndex = 0;
-
-                                    for (let i = 0; i < lines.length; i++) {
-                                        const line = lines[i];
-                                        const isTask = line.match(/^\s*[-*+]\s*\[([ xX])\]/) || line.match(/^\s*\d+\.\s*\[([ xX])\]/);
-
-                                        if (isTask) {
-                                            if (currentChecklistIndex === checklistIndexTarget) {
-                                                const isChecking = line.match(/\[ \]/);
-
-                                                if (isChecking) {
-                                                    const toggledLine = line.replace('[ ]', '[x]');
-                                                    let endOfBlock = i;
-                                                    while (endOfBlock + 1 < lines.length) {
-                                                        const nextLine = lines[endOfBlock + 1];
-                                                        const isNextTask = nextLine.match(/^\s*[-*+]\s*\[([ xX])\]/) || nextLine.match(/^\s*\d+\.\s*\[([ xX])\]/);
-                                                        if (isNextTask) {
-                                                            endOfBlock++;
-                                                        } else {
-                                                            break;
-                                                        }
-                                                    }
-                                                    if (endOfBlock > i) {
-                                                        lines.splice(i, 1);
-                                                        lines.splice(endOfBlock, 0, toggledLine);
-                                                    } else {
-                                                        lines[i] = toggledLine;
-                                                    }
-                                                } else {
-                                                    lines[i] = line.replace(/\[x\]/i, '[ ]');
-                                                }
-                                                const newContent = lines.join('\n');
-                                                onUpdate(newContent);
-                                                return;
-                                            }
-                                            currentChecklistIndex++;
-                                        }
-                                    }
-                                };
-                                handleToggleCheckboxLocally(index);
+                                const newContent = toggleCheckboxByIndex(note.content, index);
+                                if (newContent !== note.content) {
+                                    onUpdate(newContent);
+                                }
                             } : undefined}
                         />
                     </View>

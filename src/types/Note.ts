@@ -37,6 +37,7 @@ export interface AppSettings {
   syncInterval: number; // in minutes
   theme: 'light' | 'dark' | 'auto';
   defaultView: 'grid' | 'list';
+  editorMode: 'markdown' | 'richtext';
 }
 
 export interface SearchResult {

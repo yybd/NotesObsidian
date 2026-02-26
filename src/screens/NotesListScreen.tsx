@@ -5,14 +5,10 @@ import {
     StyleSheet,
     TouchableOpacity,
     Text,
-    TextInput,
-    ActivityIndicator,
     Platform,
     Keyboard,
     RefreshControl,
-    ScrollView,
     AppState,
-    AppStateStatus,
     useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,13 +16,17 @@ import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNotesStore } from '../stores/notesStore';
 import { NoteCard } from '../components/NoteCard';
-import FrontmatterService, { updateFrontmatter, removeFrontmatterKey } from '../services/FrontmatterService';
-import { SearchBar } from '../components/SearchBar';
+import { updateFrontmatter } from '../services/FrontmatterService';
 import { MarkdownToolbar } from '../components/MarkdownToolbar';
-import { DomainSelector } from '../components/DomainSelector';
-import { NativeLiveEditor, NativeLiveEditorRef } from '../components/NativeLiveEditor';
-import { getDirection, RTL_TEXT_STYLE } from '../utils/rtlUtils';
-import { Note, DOMAINS, DomainType } from '../types/Note';
+import { RichTextToolbar } from '../components/RichTextToolbar';
+import { handleListContinuation } from '../utils/markdownUtils';
+import { SmartEditorRef } from '../components/SmartEditor';
+import { RTL_TEXT_STYLE } from '../utils/rtlUtils';
+import { Header } from '../components/Header';
+import { QuickAddInput, QuickAddInputRef } from '../components/QuickAddInput';
+import { EmptyNotesList } from '../components/EmptyNotesList';
+import { Note, DomainType } from '../types/Note';
+import { useKeyboardHeight } from '../hooks/useKeyboardHeight';
 
 export const NotesListScreen = ({ navigation }: any) => {
     const {
@@ -35,28 +35,28 @@ export const NotesListScreen = ({ navigation }: any) => {
         error,
         loadNotes,
         searchNotes,
-        deleteNote,
         archiveNote,
         createNote,
         updateNote,
         togglePinNote,
+        refreshSort,
         currentDomain,
         filterByDomain,
+        settings,
     } = useNotesStore();
+    const editorMode = settings.editorMode || 'richtext';
 
     const [quickNoteText, setQuickNoteText] = useState('');
     const [quickNotePinned, setQuickNotePinned] = useState(false);
     const [quickNoteDomain, setQuickNoteDomain] = useState<DomainType | null>(null);
     const [isSending, setIsSending] = useState(false);
-    const [inputHeight, setInputHeight] = useState(40);
-    const [keyboardVisible, setKeyboardVisible] = useState(false);
-    const [keyboardHeight, setKeyboardHeight] = useState(0);
+    const { keyboardVisible, keyboardHeight } = useKeyboardHeight();
     const [refreshing, setRefreshing] = useState(false);
+    const [isSearchFocused, setIsSearchFocused] = useState(false);
+    const [isQuickNoteActive, setIsQuickNoteActive] = useState(false);
     const appState = useRef(AppState.currentState);
     const [isEditingNote, setIsEditingNote] = useState(false);
-    const [editingNoteIndex, setEditingNoteIndex] = useState<number | null>(null);
-    const selectionRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
-    const editorRef = useRef<NativeLiveEditorRef>(null);
+    const quickAddInputRef = useRef<QuickAddInputRef>(null);
     const flatListRef = useRef<FlatList>(null);
     const insets = useSafeAreaInsets();
     const { height: screenHeight } = useWindowDimensions();
@@ -67,64 +67,31 @@ export const NotesListScreen = ({ navigation }: any) => {
     const TOOLBAR_HEIGHT = 48;
     // Header (~100px) + SearchBar (~76px) + safety margin
     const HEADER_AREA_HEIGHT = 180;
-    const maxInputHeight = keyboardVisible
-        ? screenHeight - keyboardHeight - TOOLBAR_HEIGHT - HEADER_AREA_HEIGHT
-        : 250;
-
     // Calculate available height for the editing card
     // The card sits in the bottom section (above toolbar, above keyboard)
     // Available space = from bottom of search/domain bar down to toolbar
     const topBoundary = headerBottomY > 0 ? headerBottomY : HEADER_AREA_HEIGHT;
+    
+    const maxInputHeight = keyboardVisible
+        ? screenHeight - keyboardHeight - TOOLBAR_HEIGHT - topBoundary - 10 // Account for domain selector and padding
+        : 250;
+
     const editCardMaxHeight = keyboardVisible
         ? screenHeight - keyboardHeight - TOOLBAR_HEIGHT - topBoundary
         : screenHeight - topBoundary - 100;
 
     // Inline edit state for NoteCard toolbar
-    const [inlineEditInputRef, setInlineEditInputRef] = useState<React.RefObject<NativeLiveEditorRef | null> | null>(null);
+    const [inlineEditInstance, setInlineEditInstance] = useState<SmartEditorRef | null>(null);
+    // Direct RichEditor ref — extracted once when editing starts
+    const [inlineRichEditorRef, setInlineRichEditorRef] = useState<{ current: any } | null>(null);
     const [inlineEditContent, setInlineEditContent] = useState('');
     const [inlineEditSelection, setInlineEditSelection] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
+    const [inlineEditPinned, setInlineEditPinned] = useState(false);
     const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
-    const [editingNote, setEditingNote] = useState<Note | null>(null);
     const [showToast, setShowToast] = useState(false);
-
-    // Draft note tracking for auto-save
-    const draftNoteRef = useRef<Note | null>(null);
-    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         loadNotes();
-
-        // Keyboard listeners for dynamic padding
-        // Track last height to avoid re-rendering from minor iOS keyboard height fluctuations
-        let lastKeyboardHeight = 0;
-
-        const showListener = Keyboard.addListener(
-            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-            (e) => {
-                const newHeight = e.endCoordinates.height;
-                setKeyboardVisible(true);
-
-                // Only update height state if it changed significantly (>10px)
-                // iOS fires keyboardWillShow for tiny QuickType bar adjustments, causing jitter
-                if (Math.abs(newHeight - lastKeyboardHeight) > 10) {
-                    lastKeyboardHeight = newHeight;
-                    setKeyboardHeight(newHeight);
-                }
-            }
-        );
-        const hideListener = Keyboard.addListener(
-            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-            () => {
-                lastKeyboardHeight = 0;
-                setKeyboardVisible(false);
-                setKeyboardHeight(0);
-            }
-        );
-
-        return () => {
-            showListener.remove();
-            hideListener.remove();
-        };
     }, []);
 
     // Handle AppState changes (Auto-refresh on foreground)
@@ -134,7 +101,6 @@ export const NotesListScreen = ({ navigation }: any) => {
                 appState.current.match(/inactive|background/) &&
                 nextAppState === 'active'
             ) {
-                console.log('App has come to the foreground! Refreshing notes...');
                 loadNotes();
             }
 
@@ -151,24 +117,24 @@ export const NotesListScreen = ({ navigation }: any) => {
         const hideListener = Keyboard.addListener(
             Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
             async () => {
+                // When keyboard starts to hide, the quick note is no longer active
+                setIsQuickNoteActive(false);
+
                 // If sending, do nothing (let send handler finish)
                 if (isSending) return;
 
                 // If editing existing note, do nothing
                 if (isEditingNote) return;
 
-                // If we have a draft note, delete it
-                if (draftNoteRef.current) {
-                    await deleteNote(draftNoteRef.current.filePath);
-                    draftNoteRef.current = null;
-                }
+                // We no longer delete draft files on hide. The quick add content stays in 
+                // in-memory state until they either send it or explicitly clear it.
 
                 // Clear text and pinned/domain state
                 if (quickNoteText) {
+                    quickAddInputRef.current?.clear();
                     setQuickNoteText('');
                     setQuickNotePinned(false);
                     setQuickNoteDomain(null);
-                    setInputHeight(40);
 
                 }
 
@@ -178,54 +144,9 @@ export const NotesListScreen = ({ navigation }: any) => {
         return () => {
             hideListener.remove();
         };
-    }, [isSending, isEditingNote, quickNoteText, deleteNote]);
+    }, [isSending, isEditingNote, quickNoteText]);
 
-    // Auto-save quick note while typing
-    useEffect(() => {
-        const text = quickNoteText.trim();
 
-        // Clear previous timeout
-        if (saveTimeoutRef.current) {
-            clearTimeout(saveTimeoutRef.current);
-        }
-
-        // Don't save empty text
-        if (!text) {
-            return;
-        }
-
-        // Debounce save by 1 second
-        saveTimeoutRef.current = setTimeout(async () => {
-            try {
-                // Format text with # on first line
-                const lines = text.split('\n');
-                const firstLine = lines[0];
-                if (!firstLine.startsWith('#')) {
-                    lines[0] = '# ' + firstLine;
-                }
-                const formattedText = lines.join('\n');
-
-                if (draftNoteRef.current) {
-                    // Update existing draft
-                    await updateNote(draftNoteRef.current.id, draftNoteRef.current.filePath, formattedText);
-                } else {
-                    // Create new draft
-                    const filename = generateFilename();
-                    const newNote = await createNote(filename, formattedText);
-                    draftNoteRef.current = newNote;
-                    // Don't call loadNotes here - createNote already adds to store
-                }
-            } catch (error) {
-                console.error('Error auto-saving quick note:', error);
-            }
-        }, 1000);
-
-        return () => {
-            if (saveTimeoutRef.current) {
-                clearTimeout(saveTimeoutRef.current);
-            }
-        };
-    }, [quickNoteText]);
 
     // Handle text change with list/checkbox continuation
     const handleTextChangeWithListContinuation = useCallback((
@@ -233,67 +154,19 @@ export const NotesListScreen = ({ navigation }: any) => {
         oldText: string,
         setText: (text: string) => void,
     ) => {
-        // Check if user just pressed Enter (newline was added)
-        if (newText.length > oldText.length && newText.includes('\n')) {
-            const addedChar = newText.substring(oldText.length);
+        const result = handleListContinuation(newText, oldText);
 
-            // Only process if a newline was just added
-            if (addedChar === '\n' || addedChar.includes('\n')) {
-                // Find the line before the cursor (where Enter was pressed)
-                const cursorPos = newText.lastIndexOf('\n', newText.length - 1);
-                const lineStart = newText.lastIndexOf('\n', cursorPos - 1) + 1;
-                const previousLine = newText.substring(lineStart, cursorPos);
-
-                // Check for checkbox pattern: "- [ ] " or "- [x] "
-                const checkboxMatch = previousLine.match(/^(\s*- \[[ xX]\] )/);
-                if (checkboxMatch) {
-                    // If the line only has the checkbox (empty content), remove it and don't continue
-                    const lineContent = previousLine.substring(checkboxMatch[0].length).trim();
-                    if (!lineContent) {
-                        // Remove the empty checkbox line and the newline
-                        const cleanedText = newText.substring(0, lineStart) + newText.substring(cursorPos + 1);
-                        setText(cleanedText);
-                        return;
-                    }
-                    // Add unchecked checkbox to new line
-                    const prefix = '- [ ] ';
-                    const modifiedText = newText.substring(0, cursorPos + 1) + prefix + newText.substring(cursorPos + 1);
-
-                    // Atomically set text and cursor position to prevent iOS jumping
-                    const newPos = cursorPos + 1 + prefix.length;
-                    editorRef.current?.setTextAndSelection?.(modifiedText, { start: newPos, end: newPos });
-
-                    setText(modifiedText);
-                    return;
-                }
-
-                // Check for list pattern: "- "
-                const listMatch = previousLine.match(/^(\s*- )/);
-                if (listMatch) {
-                    // If the line only has the list marker (empty content), remove it and don't continue
-                    const lineContent = previousLine.substring(listMatch[0].length).trim();
-                    if (!lineContent) {
-                        // Remove the empty list line and the newline
-                        const cleanedText = newText.substring(0, lineStart) + newText.substring(cursorPos + 1);
-                        setText(cleanedText);
-                        return;
-                    }
-                    // Add list marker to new line
-                    const prefix = '- ';
-                    const modifiedText = newText.substring(0, cursorPos + 1) + prefix + newText.substring(cursorPos + 1);
-
-                    // Atomically set text and cursor position to prevent iOS jumping
-                    const newPos = cursorPos + 1 + prefix.length;
-                    editorRef.current?.setTextAndSelection?.(modifiedText, { start: newPos, end: newPos });
-
-                    setText(modifiedText);
-                    return;
+        if (result) {
+            if (result.cursorShouldMove) {
+                const newSelection = { start: result.newCursorPos, end: result.newCursorPos };
+                if (setText === setQuickNoteText) {
+                    quickAddInputRef.current?.setTextAndSelection(result.modifiedText, newSelection);
                 }
             }
+            setText(result.modifiedText);
+        } else {
+            setText(newText);
         }
-
-        // No list continuation needed
-        setText(newText);
     }, []);
 
     // Handle inline note update
@@ -341,6 +214,7 @@ export const NotesListScreen = ({ navigation }: any) => {
 
         setIsSending(true);
         Keyboard.dismiss();
+        quickAddInputRef.current?.blur();
 
         try {
             // Format text with # on first line
@@ -361,22 +235,16 @@ export const NotesListScreen = ({ navigation }: any) => {
                 formattedText = updateFrontmatter(formattedText, 'domain', quickNoteDomain);
             }
 
-            if (draftNoteRef.current) {
-                // Update the existing draft one more time to ensure latest content is saved
-                await updateNote(draftNoteRef.current.id, draftNoteRef.current.filePath, formattedText);
-            } else {
-                // Create new note if auto-save hasn't created one yet
-                const filename = generateFilename();
-                await createNote(filename, formattedText);
-            }
+            // Create new note
+            const filename = generateFilename();
+            await createNote(filename, formattedText);
 
             // Clear and reset
+            quickAddInputRef.current?.clear();
             setQuickNoteText('');
-            setQuickNotePinned(false); // Reset pinned state
-            setQuickNoteDomain(null); // Reset domain state
-            setInputHeight(40);
+            setQuickNotePinned(false);
+            setQuickNoteDomain(null);
 
-            draftNoteRef.current = null; // Reset for next note
             await loadNotes();
         } catch (error) {
             console.error('Error creating quick note:', error);
@@ -385,14 +253,7 @@ export const NotesListScreen = ({ navigation }: any) => {
         }
     };
 
-    // Handle text input content size change
-    const handleContentSizeChange = (event: any) => {
-        const height = event.nativeEvent.contentSize.height;
-        // Min 40, Max 120 (about 4 lines)
-        setInputHeight(Math.min(Math.max(40, height), 120));
-    };
-
-    const renderRightActions = (progress: any, dragX: any, item: Note) => {
+    const renderRightActions = (_progress: any, _dragX: any, item: Note) => {
         return (
             <TouchableOpacity
                 style={styles.archiveAction}
@@ -414,91 +275,38 @@ export const NotesListScreen = ({ navigation }: any) => {
                         note={item}
                         style={{ marginBottom: 0 }}
                         onUpdate={(content) => handleUpdateNote(item, content)}
-                        maxEditHeight={isEditingNote && editingNoteId === item.id ? editCardMaxHeight - 100 : undefined}
-                        forceExitEdit={isEditingNote && editingNoteId !== item.id}
-                        onEditStart={(ref, content, sel) => {
+                        onEditRequest={() => {
                             setIsEditingNote(true);
-                            setEditingNoteIndex(index);
                             setEditingNoteId(item.id);
-                            setEditingNote(item);
-                            // @ts-ignore Since NativeLiveEditorRef isn't exactly TextInput, but for toolbar we might adapt it or pass it.
-                            setInlineEditInputRef(ref as any);
-                            setInlineEditContent(content);
-                            setInlineEditSelection(sel);
-                            // Scroll to top so editing card is visible
-                            setTimeout(() => {
-                                flatListRef.current?.scrollToIndex({
-                                    index,
-                                    animated: true,
-                                    viewPosition: 0,
-                                });
-                            }, 300);
                         }}
-                        onEditEnd={() => {
-                            setIsEditingNote(false);
-                            setEditingNoteIndex(null);
-                            setEditingNoteId(null);
-                            setEditingNote(null);
-                            setInlineEditInputRef(null);
-                        }}
-                        onEditContentChange={(content) => setInlineEditContent(content)}
-                        onEditSelectionChange={(sel) => setInlineEditSelection(sel)}
-                        externalEditContent={inlineEditContent}
                     />
                 </Swipeable>
             </View>
         );
-    }, [handleUpdateNote, inlineEditContent, isEditingNote, editingNoteId, editCardMaxHeight]);
+    }, [handleUpdateNote, isEditingNote, editingNoteId]);
 
-    const renderEmpty = () => {
-        if (isLoading) {
-            return (
-                <View style={styles.emptyContainer}>
-                    <ActivityIndicator size="large" color="#6200EE" />
-                </View>
-            );
-        }
-        return (
-            <View style={styles.emptyContainer}>
-                <Ionicons name="document-text-outline" size={64} color="#CCC" />
-                <Text style={styles.emptyTitle}>אין פתקים עדיין</Text>
-                <Text style={styles.emptyText}>
-                    כתוב פתק למטה ולחץ על שלח
-                </Text>
-            </View>
-        );
-    };
+    // Render method removed, using component directly inline
 
     return (
         <View style={styles.container}>
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={handleSettings} style={styles.iconButton}>
-                    <Ionicons name="settings-outline" size={24} color="#1A1A1A" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>הפתקים שלי</Text>
-                <View style={styles.iconPlaceholder} />
-            </View>
-
-            {/* Search Bar */}
-            <View
-                style={styles.searchContainer}
-                onLayout={(e) => {
-                    const { y, height } = e.nativeEvent.layout;
-                    setHeaderBottomY(y + height);
-                }}
-            >
-                <SearchBar onSearch={searchNotes} />
-                <DomainSelector
-                    selectedDomain={currentDomain}
-                    onSelectDomain={filterByDomain}
-                    mode="filter"
-                />
-            </View>
+            {/* Header / Search & Domain */}
+            <Header
+                title="הפתקים שלי"
+                onSettingsPress={handleSettings}
+                onSearch={searchNotes}
+                onSearchFocus={() => setIsSearchFocused(true)}
+                onSearchBlur={() => setIsSearchFocused(false)}
+                isSearchFocused={isSearchFocused}
+                currentDomain={currentDomain}
+                onFilterByDomain={filterByDomain}
+                hideSearchAndDomain={isEditingNote || isQuickNoteActive}
+                onLayout={(y, height) => setHeaderBottomY(y + height)}
+            />
 
             {/* Notes List */}
             <FlatList
                 ref={flatListRef}
+                style={{ flex: 1 }}
                 data={filteredNotes}
                 renderItem={renderNote}
                 keyExtractor={(item) => item.id}
@@ -507,9 +315,10 @@ export const NotesListScreen = ({ navigation }: any) => {
                     styles.listContent,
                     { paddingBottom: keyboardVisible ? keyboardHeight + 160 : 120 }
                 ]}
-                ListEmptyComponent={renderEmpty}
+                ListEmptyComponent={<EmptyNotesList isLoading={isLoading} />}
                 showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="always"
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
@@ -534,130 +343,107 @@ export const NotesListScreen = ({ navigation }: any) => {
             />
 
             {/* Bottom Section - Absolutely positioned above keyboard */}
-            <View
-                style={[styles.bottomSection, { bottom: keyboardVisible ? keyboardHeight : 0 }]}
-            >
-                {/* Quick Note Input - Hide when editing existing note */}
-                {!isEditingNote && (
-                    <View style={[styles.quickNoteContainer, { paddingBottom: keyboardVisible ? 12 : insets.bottom > 0 ? insets.bottom : 16 }]}>
-                        {keyboardVisible && (
-                            <DomainSelector
-                                selectedDomain={quickNoteDomain}
-                                onSelectDomain={setQuickNoteDomain}
-                                mode="select"
-                            />
-                        )}
-                        <View style={styles.inputWrapper}>
-                            <ScrollView
-                                style={[styles.quickNoteInputContainer, { maxHeight: maxInputHeight }]}
-                                keyboardShouldPersistTaps="always"
-                                showsVerticalScrollIndicator={false}
-                                bounces={false}
-                            >
-                                <NativeLiveEditor
-                                    ref={editorRef}
-                                    initialContent={quickNoteText}
-                                    onChange={(text) => handleTextChangeWithListContinuation(text, quickNoteText, setQuickNoteText)}
-                                    onSelectionChange={(e) => { selectionRef.current = e.nativeEvent.selection; }}
-                                    style={{ minHeight: 28 }}
-                                    placeholder="כתוב.."
-                                    scrollEnabled={false}
-                                />
-                            </ScrollView>
-                            <TouchableOpacity
-                                style={[
-                                    styles.sendButton,
-                                    (!quickNoteText.trim() || isSending) && styles.sendButtonDisabled
-                                ]}
-                                onPress={handleSendNote}
-                                disabled={!quickNoteText.trim() || isSending}
-                            >
-                                {isSending ? (
-                                    <ActivityIndicator size="small" color="#FFFFFF" />
-                                ) : (
-                                    <Ionicons name="send" size={20} color="#FFFFFF" />
-                                )}
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                )}
+            {!isSearchFocused && (
+                <View
+                    pointerEvents="box-none"
+                    style={[
+                        styles.bottomSection, 
+                        keyboardVisible && !isEditingNote
+                            ? { top: topBoundary, bottom: keyboardHeight }
+                            : { bottom: keyboardVisible ? keyboardHeight : 0 }
+                    ]}
+                >
+                    {/* Quick Note Input - Hide when editing existing note or searching */}
+                    {!isEditingNote && (
+                        <QuickAddInput
+                            ref={quickAddInputRef}
+                            text={quickNoteText}
+                            isPinned={quickNotePinned}
+                            domain={quickNoteDomain}
+                            isSending={isSending}
+                            keyboardVisible={keyboardVisible}
+                            maxInputHeight={maxInputHeight}
+                            bottomPadding={keyboardVisible ? 12 : insets.bottom > 0 ? insets.bottom : 16}
+                            onTextChange={(text) => handleTextChangeWithListContinuation(text, quickNoteText, setQuickNoteText)}
+                            onPinChange={(newPinned) => {
+                                setQuickNotePinned(newPinned);
+                            }}
+                            onDomainChange={setQuickNoteDomain}
+                            onSend={handleSendNote}
+                            onFocus={() => setIsQuickNoteActive(true)}
+                        />
+                    )}
 
-                {/* Markdown Toolbar for Quick Note */}
-                {keyboardVisible && !isEditingNote && (
-                    <View style={styles.floatingToolbar}>
-                        <View style={styles.toolbarRow}>
+                    {/* Toolbar for floating NoteCard editing */}
+                    {keyboardVisible && isEditingNote && inlineEditInstance && (
+                        editorMode === 'markdown' ? (
                             <MarkdownToolbar
-                                inputRef={editorRef as any}
-                                text={quickNoteText}
-                                onTextChange={setQuickNoteText}
-                                selection={selectionRef.current}
-                                onSelectionChangeRequest={(sel) => {
-                                    editorRef.current?.setSelection?.(sel);
-                                    selectionRef.current = sel;
-                                }}
-                                onPinPress={() => {
-                                    const newPinned = !quickNotePinned;
-                                    setQuickNotePinned(newPinned);
-
-                                    if (draftNoteRef.current) {
-                                        let currentContent = draftNoteRef.current.content;
-                                        if (newPinned) {
-                                            currentContent = updateFrontmatter(currentContent, 'pinned', true);
-                                        } else {
-                                            currentContent = removeFrontmatterKey(currentContent, 'pinned');
-                                        }
-
-                                        draftNoteRef.current = {
-                                            ...draftNoteRef.current,
-                                            content: currentContent,
-                                            pinned: newPinned
-                                        };
-
-                                        updateNote(draftNoteRef.current.id, draftNoteRef.current.filePath, currentContent);
-                                    }
-                                }}
-                                isPinned={quickNotePinned}
-                            />
-                        </View>
-                    </View>
-                )}
-
-                {/* Toolbar for inline NoteCard editing */}
-                {keyboardVisible && isEditingNote && inlineEditInputRef && (
-                    <View style={styles.floatingToolbar}>
-                        <View style={styles.toolbarRow}>
-                            <MarkdownToolbar
-                                inputRef={inlineEditInputRef as any}
+                                inputRef={{ current: inlineEditInstance } as any}
                                 text={inlineEditContent}
                                 onTextChange={setInlineEditContent}
                                 selection={inlineEditSelection}
                                 onSelectionChangeRequest={setInlineEditSelection}
                                 onPinPress={editingNoteId ? () => {
-                                    const note = filteredNotes.find(n => n.id === editingNoteId);
-                                    if (note) {
-                                        const parsedOriginal = FrontmatterService.parseFrontmatter(note.content);
-                                        const newPinned = !note.pinned;
-
-                                        const newFrontmatter = { ...parsedOriginal.frontmatter };
-                                        if (newPinned) {
-                                            newFrontmatter['pinned'] = true;
-                                        } else {
-                                            delete newFrontmatter['pinned'];
-                                        }
-
-                                        // Compose the NEW full content correctly
-                                        const newFullContent = FrontmatterService.composeContent(newFrontmatter, inlineEditContent);
-
-                                        // Persist to store/file. 
-                                        togglePinNote(editingNoteId, newFullContent);
-                                    }
+                                    setInlineEditPinned(!inlineEditPinned);
+                                    togglePinNote(editingNoteId, inlineEditContent, true);
                                 } : undefined}
-                                isPinned={filteredNotes.find(n => n.id === editingNoteId)?.pinned}
+                                isPinned={inlineEditPinned}
+                            />
+                        ) : (
+                            <RichTextToolbar
+                                richEditorRef={inlineRichEditorRef as any}
+                                onPinPress={editingNoteId ? () => {
+                                    setInlineEditPinned(!inlineEditPinned);
+                                    togglePinNote(editingNoteId, inlineEditContent, true);
+                                } : undefined}
+                                isPinned={inlineEditPinned}
+                            />
+                        )
+                    )}
+                </View>
+            )}
+
+            {/* Floating Editor Overlay */}
+            {isEditingNote && editingNoteId && (() => {
+                const editingNote = filteredNotes.find(n => n.id === editingNoteId);
+                if (!editingNote) return null;
+                return (
+                    <View style={[StyleSheet.absoluteFill, { zIndex: 50, paddingTop: insets.top, paddingBottom: (keyboardVisible ? keyboardHeight + TOOLBAR_HEIGHT : insets.bottom) + 10, backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+                        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => Keyboard.dismiss()} activeOpacity={1} />
+                        <View style={{ flex: 1, marginHorizontal: 16 }}>
+                            <NoteCard
+                                note={editingNote}
+                                autoEdit={true}
+                                style={{ flex: 1, marginBottom: 0 }}
+                                onUpdate={(content) => handleUpdateNote(editingNote, content)}
+                                onEditStart={(ref, content, sel) => {
+                                    setInlineEditPinned(!!editingNote.pinned);
+                                    if (ref && ref !== inlineEditInstance) {
+                                        setInlineEditInstance(ref as any);
+                                        if (editorMode === 'richtext') {
+                                            const rRef = (ref as SmartEditorRef).getRichEditorRef?.() ?? null;
+                                            setInlineRichEditorRef(rRef);
+                                        }
+                                    }
+                                    setInlineEditContent(content);
+                                    setInlineEditSelection(sel);
+                                }}
+                                onEditEnd={() => {
+                                    setIsEditingNote(false);
+                                    setEditingNoteId(null);
+                                    setInlineEditInstance(null);
+                                    setInlineRichEditorRef(null);
+                                    refreshSort();
+                                }}
+                                onEditContentChange={(content) => setInlineEditContent(content)}
+                                onEditSelectionChange={(sel) => setInlineEditSelection(sel)}
+                                externalEditContent={inlineEditContent}
+                                externalIsPinned={inlineEditPinned}
                             />
                         </View>
                     </View>
-                )}
-            </View>
+                );
+            })()}
 
             {/* Error Message */}
             {
@@ -724,38 +510,11 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingTop: 16,
         backgroundColor: '#FFFFFF',
+        zIndex: 10,
     },
     listContent: {
         padding: 20,
         paddingBottom: 120, // Extra space for quick note input
-    },
-    emptyContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingTop: 100,
-    },
-    emptyTitle: {
-        fontSize: 20,
-        fontWeight: '600',
-        color: '#666',
-        marginTop: 16,
-        marginBottom: 8,
-    },
-    emptyText: {
-        fontSize: 14,
-        color: '#999',
-        textAlign: 'center',
-    },
-    quickNoteContainer: {
-        backgroundColor: '#FFFFFF',
-        borderTopWidth: 1,
-        borderTopColor: '#E0E0E0',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-    },
-    inputWrapper: {
-        flexDirection: 'row',
-        alignItems: 'flex-end',
     },
     keyboardDismissButton: {
         width: 36,
@@ -763,41 +522,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 8,
-    },
-    // Telegram style input pill container
-    quickNoteInputContainer: {
-        flex: 1,
-        backgroundColor: '#F0F2F5',
-        borderRadius: 12, // Matched SearchBar radius
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        marginLeft: 10,
-        borderWidth: 1,
-        borderColor: '#E4E6EB',
-        minHeight: 44,
-    },
-    quickNoteTextInput: {
-        minHeight: 28,
-        padding: 0,
-        fontSize: 16,
-    },
-    sendButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: '#6200EE',
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#6200EE',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 4,
-        marginLeft: 8,
-    },
-    sendButtonDisabled: {
-        backgroundColor: '#CCC',
-        shadowOpacity: 0,
     },
     errorContainer: {
         position: 'absolute',
@@ -835,18 +559,6 @@ const styles = StyleSheet.create({
         borderTopWidth: 1,
         borderTopColor: '#E0E0E0',
         marginTop: 8,
-    },
-    floatingToolbar: {
-        backgroundColor: '#FFFFFF',
-        borderTopWidth: 1,
-        borderTopColor: '#E0E0E0',
-    },
-    toolbarRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 4,
-        paddingVertical: 2,
     },
     pinButton: {
         padding: 8,

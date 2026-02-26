@@ -5,50 +5,22 @@ import {
     View,
     Text,
     TouchableOpacity,
-    TextInput,
     StyleSheet,
     ScrollView,
-    Switch,
     Alert,
     Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as DocumentPicker from 'expo-document-picker';
 import { useNotesStore } from '../stores/notesStore';
 import ObsidianService from '../services/ObsidianService';
-import VaultSyncService from '../services/VaultSyncService';
 import StorageService from '../services/StorageService';
 import { ArchiveModal } from '../components/ArchiveModal';
 import { RTL_TEXT_STYLE } from '../utils/rtlUtils';
 
 export const SettingsScreen = ({ navigation }: any) => {
-    const { settings, updateSettings, setVaultConfig, importFromObsidian } = useNotesStore();
+    const { settings, updateSettings, setVaultConfig, setEditorMode } = useNotesStore();
     const [vaultName, setVaultName] = useState(settings.vault?.vaultName || '');
-    const [folderPath, setFolderPath] = useState(settings.vault?.folderPath || '');
-    const [isCheckingObsidian, setIsCheckingObsidian] = useState(false);
     const [isArchiveVisible, setIsArchiveVisible] = useState(false);
-
-    const handleConnectVault = async () => {
-        if (!vaultName.trim()) {
-            Alert.alert('שגיאה', 'הכנס את שם ה-Vault של Obsidian');
-            return;
-        }
-
-        setIsCheckingObsidian(true);
-        try {
-            setVaultConfig({
-                vaultName: vaultName.trim(),
-                folderPath: folderPath.trim() || undefined,
-                isConnected: true,
-            });
-
-            Alert.alert('הצלחה', `ה - Vault "${vaultName}" חובר בהצלחה`);
-        } catch (error) {
-            Alert.alert('שגיאה', 'לא ניתן לחבר ל-Vault');
-        } finally {
-            setIsCheckingObsidian(false);
-        }
-    };
 
     const handleSelectVaultDirectory = async () => {
         try {
@@ -90,26 +62,6 @@ export const SettingsScreen = ({ navigation }: any) => {
                 },
             ]
         );
-    };
-
-    const handleImportVault = async () => {
-        try {
-            const result = await DocumentPicker.getDocumentAsync({
-                type: 'text/markdown',
-                copyToCacheDirectory: true,
-                multiple: true,
-            });
-
-            if (result.canceled) return;
-
-            for (const file of result.assets) {
-                await importFromObsidian(file.uri);
-            }
-
-            Alert.alert('הצלחה', `${result.assets.length} פתקים יובאו בהצלחה`);
-        } catch (error) {
-            Alert.alert('שגיאה', 'לא ניתן לייבא פתקים');
-        }
     };
 
     const handleAutoSyncToggle = (value: boolean) => {
@@ -184,7 +136,7 @@ export const SettingsScreen = ({ navigation }: any) => {
                             style={[styles.button, styles.buttonSecondary]}
                             onPress={handleDisconnectVault}
                         >
-                            <Ionicons name="log-out-outline" size={20} color="#F44336" />
+                            <Ionicons name="log-out-outline" size={20} color="#03A9F4" />
                             <Text style={[styles.buttonText, styles.buttonTextSecondary]}>
                                 חזור לאחסון מקומי
                             </Text>
@@ -195,6 +147,52 @@ export const SettingsScreen = ({ navigation }: any) => {
                         </Text>
                     </>
                 )}
+            </View>
+
+            {/* Editor Settings */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>תצוגת עורך הטקסט</Text>
+                <Text style={styles.description}>
+                    בחר באיזה ממשק תרצה לערוך את הפתקים. הפורמט שיישמר לקובץ תמיד יהיה Markdown.
+                </Text>
+
+                <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
+                    <TouchableOpacity
+                        style={[
+                            styles.button,
+                            { flex: 1, justifyContent: 'center', opacity: settings.editorMode === 'richtext' ? 1 : 0.6 },
+                            settings.editorMode === 'richtext' ? styles.buttonPrimary : styles.buttonSecondary
+                        ]}
+                        onPress={() => setEditorMode('richtext')}
+                    >
+                        <Ionicons name="document-text-outline" size={20} color={settings.editorMode === 'richtext' ? "#FFFFFF" : "#03A9F4"} />
+                        <Text style={[
+                            styles.buttonText,
+                            { marginLeft: 8 },
+                            settings.editorMode === 'richtext' ? {} : styles.buttonTextSecondary
+                        ]}>
+                            עורך עשיר (Web)
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[
+                            styles.button,
+                            { flex: 1, justifyContent: 'center', opacity: settings.editorMode === 'markdown' ? 1 : 0.6 },
+                            settings.editorMode === 'markdown' ? styles.buttonPrimary : styles.buttonSecondary
+                        ]}
+                        onPress={() => setEditorMode('markdown')}
+                    >
+                        <Ionicons name="code-slash-outline" size={20} color={settings.editorMode === 'markdown' ? "#FFFFFF" : "#03A9F4"} />
+                        <Text style={[
+                            styles.buttonText,
+                            { marginLeft: 8 },
+                            settings.editorMode === 'markdown' ? {} : styles.buttonTextSecondary
+                        ]}>
+                            קוד (Markdown)
+                        </Text>
+                    </TouchableOpacity>
+                </View>
             </View>
 
             {/* Archive Settings */}
@@ -208,7 +206,7 @@ export const SettingsScreen = ({ navigation }: any) => {
                     style={[styles.button, styles.buttonSecondary]}
                     onPress={() => setIsArchiveVisible(true)}
                 >
-                    <Ionicons name="archive-outline" size={20} color="#F44336" />
+                    <Ionicons name="archive-outline" size={20} color="#03A9F4" />
                     <Text style={[styles.buttonText, styles.buttonTextSecondary]}>
                         ניהול ארכיון הפתקים
                     </Text>
@@ -284,16 +282,6 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         lineHeight: 20,
     },
-    input: { // This style is no longer used but kept for now
-        borderWidth: 1,
-        borderColor: '#E0E0E0',
-        borderRadius: 8,
-        padding: 12,
-        fontSize: 16,
-        color: '#1A1A1A',
-        marginBottom: 12,
-        ...RTL_TEXT_STYLE,
-    },
     button: {
         flexDirection: 'row',
         backgroundColor: '#6200EE',
@@ -303,16 +291,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 12,
     },
-    buttonDisabled: { // This style is no longer used but kept for now
-        backgroundColor: '#CCC',
-    },
     buttonSecondary: {
-        backgroundColor: '#FFE5E5',
-    },
-    buttonOutline: { // This style is no longer used but kept for now
-        backgroundColor: '#FFFFFF',
-        borderWidth: 1,
-        borderColor: '#6200EE',
+        backgroundColor: '#E1F5FE',
     },
     buttonText: {
         color: '#FFFFFF',
@@ -321,52 +301,12 @@ const styles = StyleSheet.create({
         marginLeft: 8,
     },
     buttonTextSecondary: {
-        color: '#F44336',
-    },
-    buttonTextOutline: { // This style is no longer used but kept for now
-        color: '#6200EE',
-    },
-    connectedCard: { // This style is no longer used but kept for now
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#E8F5E9',
-        padding: 12,
-        borderRadius: 8,
-        marginBottom: 12,
-    },
-    connectedText: { // This style is no longer used but kept for now
-        fontSize: 14,
-        color: '#2E7D32',
-        marginLeft: 8,
-        fontWeight: '500',
-    },
-    settingRow: { // This style is no longer used but kept for now
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 8,
-    },
-    settingLabel: { // This style is no longer used but kept for now
-        fontSize: 16,
-        color: '#1A1A1A',
-        flex: 1,
-        ...RTL_TEXT_STYLE,
-        marginRight: 12,
-    },
-    settingDescription: { // This style is no longer used but kept for now
-        fontSize: 12,
-        color: '#999',
-        marginTop: 4,
+        color: '#03A9F4',
     },
     infoText: {
         fontSize: 14,
         color: '#666',
         marginBottom: 8,
-    },
-    instructionText: { // This style is no longer used but kept for now
-        fontSize: 14,
-        color: '#666',
-        lineHeight: 22,
     },
     hint: {
         fontSize: 12,
@@ -375,26 +315,8 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: 8,
     },
-    connectedSubtext: { // This style is no longer used but kept for now
-        fontSize: 12,
-        color: '#4CAF50',
-        marginTop: 4,
-    },
     buttonPrimary: {
         backgroundColor: '#6200EE',
-    },
-    orText: { // This style is no longer used but kept for now
-        textAlign: 'center',
-        color: '#999',
-        fontSize: 14,
-        marginVertical: 12,
-    },
-    helpText: { // This style is no longer used but kept for now
-        fontSize: 12,
-        color: '#666',
-        textAlign: 'center',
-        marginTop: -8,
-        marginBottom: 12,
     },
     storageCard: {
         flexDirection: 'row',

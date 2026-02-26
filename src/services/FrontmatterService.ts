@@ -13,7 +13,9 @@ interface ParseResult {
  * Parse YAML frontmatter from markdown content
  */
 export function parseFrontmatter(content: string): ParseResult {
-    const frontmatterRegex = /^\s*---\s*[\r\n]+([\s\S]*?)[\r\n]+---\s*[\r\n]*/;
+    // We want to capture exactly what comes after the second `---` and its mandatory trailing newline
+    // without aggressively consuming whitespace from the body itself.
+    const frontmatterRegex = /^\s*---\s*[\r\n]+([\s\S]*?)[\r\n]+---\r?\n?/;
     const match = content.match(frontmatterRegex);
 
     if (!match) {

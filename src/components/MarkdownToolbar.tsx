@@ -14,6 +14,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { NativeLiveEditorRef } from './NativeLiveEditor';
+import { toggleHeading, toggleList, toggleCheckbox } from '../utils/markdownUtils';
 
 
 interface MarkdownToolbarProps {
@@ -45,22 +46,53 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
         };
     };
 
+    // Calculate active states
+    const { start, end } = getSelection();
+
+    // Bold is active if there is text selected AND it starts/ends with ** OR if the surrounding text has **
+    let isBoldActive = false;
+    if (text) {
+        const selected = text.substring(start, end);
+        if (selected.length > 0 && selected.startsWith('**') && selected.endsWith('**')) {
+            isBoldActive = true;
+        } else {
+            const beforeSelection = text.substring(0, start);
+            const afterSelection = text.substring(end);
+            if (beforeSelection.endsWith('**') && afterSelection.startsWith('**')) {
+                isBoldActive = true;
+            }
+        }
+    }
+
+    // Find current line to check block-level formatting
+    let lineStart = start;
+    while (lineStart > 0 && text[lineStart - 1] !== '\n') {
+        lineStart--;
+    }
+    const currentLine = text.substring(lineStart);
+
+    const isH1Active = currentLine.startsWith('# ');
+    const isListActive = currentLine.startsWith('- ') && !currentLine.startsWith('- [');
+    const isCheckboxActive = currentLine.match(/^- \[[ xX]\] /) !== null;
+
+    const applyTextChange = (newText: string, newSelection?: { start: number; end: number }) => {
+        if (newSelection) {
+            inputRef.current?.setTextAndSelection?.(newText, newSelection);
+            if (onSelectionChangeRequest) onSelectionChangeRequest(newSelection);
+        } else {
+            inputRef.current?.setText?.(newText);
+        }
+        onTextChange(newText);
+        inputRef.current?.focus();
+    };
+
     // Insert text at cursor position
     const insertAtCursor = (insertText: string) => {
-        // Fallback or old method:
-        // UnifiedRichEditor doesn't currently expose `insertText` or `wrapSelection` directly,
-        // but we can simulate it with onTextChange for now or update it in the future to map.
-        // For right now, let's keep the manual React Native logic
         const { start, end } = getSelection();
         const before = text.substring(0, start);
         const after = text.substring(end);
         const newText = before + insertText + after;
-        onTextChange(newText);
-
-        // Refocus and set cursor after inserted text
-        setTimeout(() => {
-            inputRef.current?.focus();
-        }, 50);
+        applyTextChange(newText, { start: start + insertText.length, end: start + insertText.length });
     };
 
     // Wrap selected text with prefix and suffix (or unwrap if already wrapped)
@@ -77,14 +109,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
             const before = text.substring(0, start);
             const after = text.substring(end);
             const newText = before + unwrapped + after;
-            onTextChange(newText);
-
-            if (onSelectionChangeRequest) {
-                onSelectionChangeRequest({ start: start, end: end - prefix.length - suffix.length });
-            }
-            setTimeout(() => {
-                inputRef.current?.focus();
-            }, 50);
+            applyTextChange(newText, { start: start, end: end - prefix.length - suffix.length });
             return;
         }
 
@@ -97,14 +122,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
             const beforeWithoutPrefix = beforeSelection.substring(0, beforeSelection.length - prefix.length);
             const afterWithoutSuffix = afterSelection.substring(suffix.length);
             const newText = beforeWithoutPrefix + selected + afterWithoutSuffix;
-            onTextChange(newText);
-
-            if (onSelectionChangeRequest) {
-                onSelectionChangeRequest({ start: start - prefix.length, end: end - prefix.length });
-            }
-            setTimeout(() => {
-                inputRef.current?.focus();
-            }, 50);
+            applyTextChange(newText, { start: start - prefix.length, end: end - prefix.length });
             return;
         }
 
@@ -114,57 +132,21 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
             const before = text.substring(0, start);
             const after = text.substring(end);
             const newText = before + prefix + suffix + after;
-            onTextChange(newText);
-
-            if (onSelectionChangeRequest) {
-                onSelectionChangeRequest({ start: start + prefix.length, end: start + prefix.length });
-            }
+            applyTextChange(newText, { start: start + prefix.length, end: start + prefix.length });
         } else {
             // Has selection - wrap selected text
             const before = text.substring(0, start);
             const after = text.substring(end);
             const newText = before + prefix + selected + suffix + after;
-            onTextChange(newText);
-
-            if (onSelectionChangeRequest) {
-                onSelectionChangeRequest({ start: start + prefix.length, end: end + prefix.length });
-            }
+            applyTextChange(newText, { start: start + prefix.length, end: end + prefix.length });
         }
-
-        setTimeout(() => {
-            inputRef.current?.focus();
-        }, 50);
     };
 
-    // Insert heading at start of current line
+    // Insert or remove heading at start of current line (Toggle)
     const insertHeading = () => {
         const { start } = getSelection();
-
-        // Find start of current line
-        let lineStart = start;
-        while (lineStart > 0 && text[lineStart - 1] !== '\n') {
-            lineStart--;
-        }
-
-        // Check if line already starts with #
-        const lineContent = text.substring(lineStart);
-        if (lineContent.startsWith('# ')) {
-            // Already has heading, don't add another
-            inputRef.current?.focus();
-            return;
-        }
-
-        const before = text.substring(0, lineStart);
-        const after = text.substring(lineStart);
-        const newText = before + '# ' + after;
-        onTextChange(newText);
-
-        if (onSelectionChangeRequest) {
-            onSelectionChangeRequest({ start: start + 2, end: start + 2 });
-        }
-        setTimeout(() => {
-            inputRef.current?.focus();
-        }, 50);
+        const result = toggleHeading(text, start);
+        applyTextChange(result.text, result.selection);
     };
 
     // Insert bold markers around selection (only if text is selected)
@@ -178,96 +160,18 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
         wrapSelection('**', '**');
     };
 
-    // Insert list item at start of current line
+    // Insert or remove list item at start of current line (Toggle)
     const insertList = () => {
         const { start } = getSelection();
-
-        // Find start of current line
-        let lineStart = start;
-        while (lineStart > 0 && text[lineStart - 1] !== '\n') {
-            lineStart--;
-        }
-
-        // Check if line already starts with -
-        const lineContent = text.substring(lineStart);
-        if (lineContent.startsWith('- ')) {
-            inputRef.current?.focus();
-            return;
-        }
-
-        // Add RTL marker if current line or previous line is RTL
-        let lineEnd = text.indexOf('\n', lineStart);
-        if (lineEnd === -1) lineEnd = text.length;
-        const currentLineText = text.substring(lineStart, lineEnd);
-
-        let referenceText = currentLineText;
-        if (!referenceText.trim() && lineStart > 0) {
-            let prevLineStart = lineStart - 1;
-            while (prevLineStart > 0 && text[prevLineStart - 1] !== '\n') {
-                prevLineStart--;
-            }
-            referenceText = text.substring(prevLineStart, lineStart - 1);
-        }
-
-        const prefix = '- ';
-
-        const before = text.substring(0, lineStart);
-        const after = text.substring(lineStart);
-        const newText = before + prefix + after;
-        onTextChange(newText);
-
-        if (onSelectionChangeRequest) {
-            onSelectionChangeRequest({ start: start + prefix.length, end: start + prefix.length });
-        }
-        setTimeout(() => {
-            inputRef.current?.focus();
-        }, 50);
+        const result = toggleList(text, start);
+        applyTextChange(result.text, result.selection);
     };
 
-    // Insert checkbox at start of current line
+    // Insert or remove checkbox at start of current line (Toggle)
     const insertCheckbox = () => {
         const { start } = getSelection();
-
-        // Find start of current line
-        let lineStart = start;
-        while (lineStart > 0 && text[lineStart - 1] !== '\n') {
-            lineStart--;
-        }
-
-        // Check if line already has checkbox
-        const lineContent = text.substring(lineStart);
-        if (lineContent.match(/^- \[([ xX])\] /)) {
-            inputRef.current?.focus();
-            return;
-        }
-
-        // Add RTL marker if current line or previous line is RTL
-        let lineEnd = text.indexOf('\n', lineStart);
-        if (lineEnd === -1) lineEnd = text.length;
-        const currentLineText = text.substring(lineStart, lineEnd);
-
-        let referenceText = currentLineText;
-        if (!referenceText.trim() && lineStart > 0) {
-            let prevLineStart = lineStart - 1;
-            while (prevLineStart > 0 && text[prevLineStart - 1] !== '\n') {
-                prevLineStart--;
-            }
-            referenceText = text.substring(prevLineStart, lineStart - 1);
-        }
-
-        const prefix = '- [ ] ';
-
-        const before = text.substring(0, lineStart);
-        const after = text.substring(lineStart);
-        const newText = before + prefix + after;
-        onTextChange(newText);
-
-        if (onSelectionChangeRequest) {
-            onSelectionChangeRequest({ start: start + prefix.length, end: start + prefix.length });
-        }
-        setTimeout(() => {
-            inputRef.current?.focus();
-        }, 50);
+        const result = toggleCheckbox(text, start);
+        applyTextChange(result.text, result.selection);
     };
 
     // Dismiss keyboard
@@ -287,37 +191,41 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
                 {/* Heading Button */}
                 <TouchableOpacity
                     onPress={insertHeading}
-                    style={styles.button}
+                    style={[styles.button, isH1Active && styles.activeButton]}
                     activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                    <Text style={styles.buttonText}>H1</Text>
+                    <Text style={[styles.buttonText, isH1Active && styles.activeButtonText]}>H1</Text>
                 </TouchableOpacity>
 
                 {/* Bold Button */}
                 <TouchableOpacity
                     onPress={insertBold}
-                    style={styles.button}
+                    style={[styles.button, isBoldActive && styles.activeButton]}
                     activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                    <Text style={styles.boldText}>B</Text>
+                    <Text style={[styles.boldText, isBoldActive && styles.activeButtonText]}>B</Text>
                 </TouchableOpacity>
 
                 {/* List Button */}
                 <TouchableOpacity
                     onPress={insertList}
-                    style={styles.button}
+                    style={[styles.button, isListActive && styles.activeButton]}
                     activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                    <Ionicons name="list" size={22} color="#6200EE" />
+                    <Ionicons name="list" size={22} color={isListActive ? "#FFFFFF" : "#6200EE"} />
                 </TouchableOpacity>
 
                 {/* Checkbox Button */}
                 <TouchableOpacity
                     onPress={insertCheckbox}
-                    style={styles.button}
+                    style={[styles.button, isCheckboxActive && styles.activeButton]}
                     activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                    <Ionicons name="checkbox-outline" size={22} color="#6200EE" />
+                    <Ionicons name="checkbox-outline" size={22} color={isCheckboxActive ? "#FFFFFF" : "#6200EE"} />
                 </TouchableOpacity>
 
                 {/* Separator */}
@@ -329,6 +237,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
                         onPress={onPinPress}
                         style={[styles.button, isPinned && styles.pinButtonActive]}
                         activeOpacity={0.7}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
                         <MaterialCommunityIcons
                             name={isPinned ? "pin" : "pin-outline"}
@@ -343,6 +252,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
                     onPress={dismissKeyboard}
                     style={[styles.button, styles.dismissButton]}
                     activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                     <Ionicons name="chevron-down" size={22} color="#666" />
                 </TouchableOpacity>
@@ -367,15 +277,21 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 4,
         paddingHorizontal: 8,
-        gap: 4,
+        gap: 12,
     },
     button: {
         padding: 8,
         borderRadius: 8,
         backgroundColor: '#F5F5F5',
-        minWidth: 40,
+        minWidth: 44,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    activeButton: {
+        backgroundColor: '#6200EE',
+    },
+    activeButtonText: {
+        color: '#FFFFFF',
     },
     boldIcon: {
         fontWeight: 'bold',

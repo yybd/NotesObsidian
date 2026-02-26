@@ -8,8 +8,7 @@ import { NotesListScreen } from './src/screens/NotesListScreen';
 import { NoteEditorScreen } from './src/screens/NoteEditorScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import ObsidianService from './src/services/ObsidianService';
-import FileService from './src/services/FileService';
-import { AppState, AppStateStatus, Platform, Alert } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 const Stack = createNativeStackNavigator();
 
@@ -38,17 +37,8 @@ export default function App() {
           }
         }
 
-        // Initialize file system
-        await FileService.initialize();
-
         // Set up deep linking for Obsidian callbacks
-        ObsidianService.setupDeepLinking((url) => {
-          console.log('Deep link received:', url);
-          // Handle callback from Obsidian
-          if (url.includes('sync-callback')) {
-            console.log('Sync completed successfully');
-          }
-        });
+        ObsidianService.setupDeepLinking((_url) => {});
       } catch (error) {
         console.error('App initialization error:', error);
       }
@@ -59,7 +49,6 @@ export default function App() {
     // Smart Sync: Refresh notes when app comes to foreground
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'active') {
-        console.log('📱 App came to foreground, refreshing notes...');
         loadNotes();
       }
     });

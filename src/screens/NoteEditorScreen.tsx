@@ -11,25 +11,27 @@ import {
     SafeAreaView,
     ActivityIndicator,
     ScrollView,
-    Platform,
-    Keyboard,
     StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { NativeLiveEditor, NativeLiveEditorRef } from '../components/NativeLiveEditor';
+import { SmartEditor, SmartEditorRef } from '../components/SmartEditor';
 import { MarkdownToolbar } from '../components/MarkdownToolbar';
+import { RichTextToolbar } from '../components/RichTextToolbar';
 import { DomainSelector } from '../components/DomainSelector';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNotesStore } from '../stores/notesStore';
 import { Note, DomainType } from '../types/Note';
 import FrontmatterService, { updateFrontmatter, removeFrontmatterKey } from '../services/FrontmatterService';
 import { RTL_TEXT_STYLE } from '../utils/rtlUtils';
+import { appendChecklistItem, handleListContinuation } from '../utils/markdownUtils';
+import { useKeyboardHeight } from '../hooks/useKeyboardHeight';
 
 export const NoteEditorScreen = ({ navigation, route }: any) => {
     // Safe Area Insets for bottom padding
     const insets = useSafeAreaInsets();
     const existingNoteFromRoute = route.params?.note;
-    const { createNote, updateNote } = useNotesStore();
+    const { createNote, updateNote, settings } = useNotesStore();
+    const editorMode = settings.editorMode || 'richtext';
 
     // Parse content immediately to separate frontmatter from body
     // We use a ref or simple const because route params don't change
@@ -51,6 +53,8 @@ export const NoteEditorScreen = ({ navigation, route }: any) => {
     });
     const [showToast, setShowToast] = useState(false);
 
+    const [editorInstance, setEditorInstance] = useState<SmartEditorRef | null>(null);
+    const [richEditorRefState, setRichEditorRefState] = useState<{ current: any } | null>(null);
     // Refs for accessing state in closures (TenTap bridge callbacks)
     const domainRef = useRef(domain);
     const otherFrontmatterRef = useRef(otherFrontmatter);
@@ -70,25 +74,24 @@ export const NoteEditorScreen = ({ navigation, route }: any) => {
 
     const [title, setTitle] = useState(existingNoteFromRoute?.title || '');
     const [savingStatus, setSavingStatus] = useState<'saved' | 'saving' | 'error'>('saved');
-    const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
     const lastSavedContent = useRef(existingNoteFromRoute?.content || '');
     const cssInjected = useRef(false);
 
     // Track the current note (either from route or after first create)
     const currentNoteRef = useRef<Note | null>(existingNoteFromRoute || null);
-    const editorRef = useRef<NativeLiveEditorRef>(null);
+    const editorRef = useRef<SmartEditorRef>(null);
 
     // Initial content (Body only)
     const initialBody = initialParse.body || '';
-    const [bodyText, setBodyText] = useState(initialBody);
-    const [selection, setSelection] = useState({ start: 0, end: 0 });
+    const [bodyText, setBodyTextState] = useState(initialBody);
+    const lastProcessedTextRef = useRef(initialBody);
+    const [selection, setSelection] = useState({ start: initialBody.length, end: initialBody.length });
 
-    // Set cursor to end of text when mounting
-    useEffect(() => {
-        setTimeout(() => {
-            setSelection({ start: initialBody.length, end: initialBody.length });
-        }, 100);
-    }, []);
+    // Custom setter for bodyText to also update lastProcessedTextRef
+    const setBodyText = (newBody: string) => {
+        setBodyTextState(newBody);
+        lastProcessedTextRef.current = newBody;
+    };
 
     // Initialize checklist state
     useEffect(() => {
@@ -96,88 +99,39 @@ export const NoteEditorScreen = ({ navigation, route }: any) => {
     }, [initialBody]);
 
     // Keyboard state
-    const [keyboardHeight, setKeyboardHeight] = useState(0);
-    const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+    const { keyboardVisible: isKeyboardVisible, keyboardHeight } = useKeyboardHeight();
 
-    useEffect(() => {
-        const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-        const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const handleEditorChange = (rawBodyMarkdown: string) => {
+        let bodyMarkdown = rawBodyMarkdown;
+        // Apply list continuation logic for enter key presses
+        const result = handleListContinuation(rawBodyMarkdown, lastProcessedTextRef.current);
 
-        const showSubscription = Keyboard.addListener(showEvent, (e) => {
-            setKeyboardHeight(e.endCoordinates.height);
-            setIsKeyboardVisible(true);
-        });
-        const hideSubscription = Keyboard.addListener(hideEvent, () => {
-            setIsKeyboardVisible(false);
-            setKeyboardHeight(0);
-        });
-
-        return () => {
-            showSubscription.remove();
-            hideSubscription.remove();
-        };
-    }, []);
-
-    const handleEditorChange = (bodyMarkdown: string) => {
-        setBodyText(bodyMarkdown);
-        setSavingStatus('saving');
-
-        if (autoSaveTimer.current) {
-            clearTimeout(autoSaveTimer.current);
+        if (result) {
+            bodyMarkdown = result.modifiedText;
+            lastProcessedTextRef.current = result.modifiedText;
+            if (result.cursorShouldMove) {
+                const newSelection = { start: result.newCursorPos, end: result.newCursorPos };
+                setSelection(newSelection);
+                editorRef.current?.setTextAndSelection?.(result.modifiedText, newSelection);
+            } else {
+                editorRef.current?.setText?.(result.modifiedText);
+            }
+        } else {
+            lastProcessedTextRef.current = bodyMarkdown;
         }
 
-        autoSaveTimer.current = setTimeout(async () => {
-            try {
-                let fullContent = FrontmatterService.composeContent(
-                    { ...otherFrontmatterRef.current, domain: domainRef.current },
-                    bodyMarkdown
-                );
+        setBodyText(bodyMarkdown);
+        setSavingStatus('saved'); // It's visually 'saved' but only persists on back/done
 
-                // Apply pinned state
-                if (isPinnedRef.current) {
-                    fullContent = updateFrontmatter(fullContent, 'pinned', true);
-                } else {
-                    fullContent = removeFrontmatterKey(fullContent, 'pinned');
-                }
-
-                if (fullContent !== lastSavedContent.current && title.trim()) {
-                    if (currentNoteRef.current) {
-                        // Update existing note
-                        await updateNote(
-                            currentNoteRef.current.id,
-                            currentNoteRef.current.filePath,
-                            fullContent
-                        );
-                    } else {
-                        // Create new note and store reference for future saves
-                        const newNote = await createNote(title, fullContent);
-                        currentNoteRef.current = newNote;
-                    }
-                    lastSavedContent.current = fullContent;
-                }
-
-                // Update checklist state
-                const detected = /\[[ xX]\]/i.test(bodyMarkdown);
-                setHasChecklist(detected);
-
-                setSavingStatus('saved');
-            } catch (error) {
-                console.error('Save error:', error);
-                setSavingStatus('error');
-            }
-        }, 1500);
+        // Update checklist state immediately for UI
+        const detected = /\[[ xX]\]/i.test(bodyMarkdown);
+        setHasChecklist(detected);
     };
 
     useEffect(() => {
         navigation.setOptions({
             headerShown: false,
         });
-
-        return () => {
-            if (autoSaveTimer.current) {
-                clearTimeout(autoSaveTimer.current);
-            }
-        };
     }, []);
 
     const handleBack = async () => {
@@ -215,61 +169,37 @@ export const NoteEditorScreen = ({ navigation, route }: any) => {
         navigation.goBack();
     };
 
-    const appendChecklistItem = (markdown: string): string => {
-        // Find the last occurrence of a checklist item
-        const lines = markdown.split('\n');
-        let lastChecklistIndex = -1;
-
-        for (let i = lines.length - 1; i >= 0; i--) {
-            if (/^- \[[ xX]\]/.test(lines[i])) {
-                lastChecklistIndex = i;
-                break;
-            }
-        }
-
-        if (lastChecklistIndex !== -1) {
-            // Check direction of the last checklist item
-            const lastChecklistItem = lines[lastChecklistIndex];
-            const prefix = '- [ ] ';
-
-            // Insert new item after the last checklist item
-            lines.splice(lastChecklistIndex + 1, 0, prefix);
-            return lines.join('\n');
-        }
-
-        return markdown;
-    };
-
     const handleAddItem = async () => {
         try {
             const bodyMarkdown = bodyText;
             const newBodyMarkdown = appendChecklistItem(bodyMarkdown);
 
-            setBodyText(newBodyMarkdown);
-            editorRef.current?.focus();
+            if (newBodyMarkdown !== bodyMarkdown) {
+                setBodyText(newBodyMarkdown);
+                editorRef.current?.focus();
 
-            // Trigger save
-            if (currentNoteRef.current) {
-                let fullContent = FrontmatterService.composeContent(
-                    { ...otherFrontmatterRef.current, domain: domainRef.current },
-                    newBodyMarkdown
-                );
+                // Trigger save
+                if (currentNoteRef.current) {
+                    let fullContent = FrontmatterService.composeContent(
+                        { ...otherFrontmatterRef.current, domain: domainRef.current },
+                        newBodyMarkdown
+                    );
 
-                // Apply pinned state
-                if (isPinnedRef.current) {
-                    fullContent = updateFrontmatter(fullContent, 'pinned', true);
-                } else {
-                    fullContent = removeFrontmatterKey(fullContent, 'pinned');
+                    // Apply pinned state
+                    if (isPinnedRef.current) {
+                        fullContent = updateFrontmatter(fullContent, 'pinned', true);
+                    } else {
+                        fullContent = removeFrontmatterKey(fullContent, 'pinned');
+                    }
+
+                    await updateNote(
+                        currentNoteRef.current.id,
+                        currentNoteRef.current.filePath,
+                        fullContent
+                    );
+                    lastSavedContent.current = fullContent;
                 }
-
-                await updateNote(
-                    currentNoteRef.current.id,
-                    currentNoteRef.current.filePath,
-                    fullContent
-                );
-                lastSavedContent.current = fullContent;
             }
-
         } catch (error) {
             console.error('Error adding item:', error);
         }
@@ -351,12 +281,20 @@ export const NoteEditorScreen = ({ navigation, route }: any) => {
 
             {/* Rich Text Editor */}
             <View style={styles.editorContainer}>
-                <NativeLiveEditor
-                    ref={editorRef}
+                <SmartEditor
+                    ref={(ref) => {
+                        editorRef.current = ref;
+                        if (ref && ref !== editorInstance) {
+                            setEditorInstance(ref);
+                            if (editorMode === 'richtext') {
+                                const rRef = ref.getRichEditorRef?.() ?? null;
+                                setRichEditorRefState(rRef);
+                            }
+                        }
+                    }}
                     initialContent={bodyText}
                     onChange={handleEditorChange}
-                    selection={selection}
-                    onSelectionChange={(e) => setSelection(e.nativeEvent.selection)}
+                    onSelectionChange={(e: any) => setSelection(e.nativeEvent.selection)}
                     autoFocus={true}
                     style={{ flex: 1, paddingVertical: 12 }}
                     contentInset={{ bottom: isKeyboardVisible ? 70 : 0 }}
@@ -371,16 +309,24 @@ export const NoteEditorScreen = ({ navigation, route }: any) => {
                     bottom: isKeyboardVisible ? keyboardHeight : insets.bottom,
                 }
             ]}>
-                <MarkdownToolbar
-                    inputRef={editorRef as any}
-                    text={bodyText}
-                    onTextChange={(newText: string) => {
-                        setBodyText(newText);
-                        handleEditorChange(newText);
-                    }}
-                    selection={selection}
-                    onSelectionChangeRequest={setSelection}
-                />
+                {editorMode === 'markdown' ? (
+                    <MarkdownToolbar
+                        inputRef={editorRef as any}
+                        text={bodyText}
+                        onTextChange={(newText: string) => {
+                            setBodyText(newText);
+                            handleEditorChange(newText);
+                        }}
+                        selection={selection}
+                        onSelectionChangeRequest={setSelection}
+                    />
+                ) : (
+                    <RichTextToolbar
+                        richEditorRef={richEditorRefState as any}
+                        onPinPress={() => setIsPinned(!isPinned)}
+                        isPinned={isPinned}
+                    />
+                )}
             </View>
 
             {/* Helper FAB for adding checklist items */}

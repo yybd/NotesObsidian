@@ -19,7 +19,7 @@ import { NoteCard } from '../components/NoteCard';
 import { updateFrontmatter } from '../services/FrontmatterService';
 import { MarkdownToolbar } from '../components/MarkdownToolbar';
 import { RichTextToolbar } from '../components/RichTextToolbar';
-import { handleListContinuation } from '../utils/markdownUtils';
+import { handleListContinuation, appendChecklistItem } from '../utils/markdownUtils';
 import { SmartEditorRef } from '../components/SmartEditor';
 import { RTL_TEXT_STYLE } from '../utils/rtlUtils';
 import { Header } from '../components/Header';
@@ -56,6 +56,7 @@ export const NotesListScreen = ({ navigation }: any) => {
     const [isQuickNoteActive, setIsQuickNoteActive] = useState(false);
     const appState = useRef(AppState.currentState);
     const [isEditingNote, setIsEditingNote] = useState(false);
+    const pendingQuickAddRef = useRef(false);
     const quickAddInputRef = useRef<QuickAddInputRef>(null);
     const flatListRef = useRef<FlatList>(null);
     const insets = useSafeAreaInsets();
@@ -279,6 +280,11 @@ export const NotesListScreen = ({ navigation }: any) => {
                             setIsEditingNote(true);
                             setEditingNoteId(item.id);
                         }}
+                        onQuickAddRequest={() => {
+                            pendingQuickAddRef.current = true;
+                            setIsEditingNote(true);
+                            setEditingNoteId(item.id);
+                        }}
                     />
                 </Swipeable>
             </View>
@@ -427,6 +433,20 @@ export const NotesListScreen = ({ navigation }: any) => {
                                     }
                                     setInlineEditContent(content);
                                     setInlineEditSelection(sel);
+
+                                    // If opened via quick-add button, append a checklist item
+                                    if (pendingQuickAddRef.current && ref) {
+                                        pendingQuickAddRef.current = false;
+                                        setTimeout(() => {
+                                            const newBody = appendChecklistItem(content);
+                                            if (newBody !== content) {
+                                                const newSel = { start: newBody.length, end: newBody.length };
+                                                ref.setTextAndSelection?.(newBody, newSel);
+                                                setInlineEditContent(newBody);
+                                                setInlineEditSelection(newSel);
+                                            }
+                                        }, 300);
+                                    }
                                 }}
                                 onEditEnd={() => {
                                     setIsEditingNote(false);

@@ -24,7 +24,7 @@ import { DomainSelector } from './DomainSelector';
 import { UnifiedMarkdownDisplay } from './UnifiedMarkdownDisplay';
 import { SmartEditor, SmartEditorRef } from './SmartEditor';
 import { getDirection, RTL_TEXT_STYLE } from '../utils/rtlUtils';
-import { handleListContinuation, toggleCheckboxByIndex } from '../utils/markdownUtils';
+import { handleListContinuation, toggleCheckboxByIndex, appendChecklistItem } from '../utils/markdownUtils';
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -48,6 +48,7 @@ interface NoteCardProps {
     autoEdit?: boolean; // Start in edit mode immediately
     forceExitEdit?: boolean; // Force exit edit mode (when another card starts editing)
     onEditRequest?: () => void; // Request external editing instead of inline
+    onQuickAddRequest?: () => void; // Request external editing + append checklist item
     style?: StyleProp<ViewStyle>;
 }
 
@@ -68,7 +69,7 @@ const stripMarkdown = (text: string): string => {
         .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
 };
 
-export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onDismissKeyboard, onSync, onEditStart, onEditEnd, onEditContentChange, onEditSelectionChange, onStatusChange, externalEditContent, externalIsPinned, maxEditHeight, autoEdit, forceExitEdit, onEditRequest, style }) => {
+export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onDismissKeyboard, onSync, onEditStart, onEditEnd, onEditContentChange, onEditSelectionChange, onStatusChange, externalEditContent, externalIsPinned, maxEditHeight, autoEdit, forceExitEdit, onEditRequest, onQuickAddRequest, style }) => {
     // Parse content upfront for autoEdit mode
     const initialParsed = autoEdit ? FrontmatterService.parseFrontmatter(note.content) : null;
 
@@ -96,6 +97,13 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
         editorRef.current = ref;
     }, []);
 
+    // Ref flag: set to true when we just entered edit mode, cleared after focus is applied.
+    // This prevents handlePress from exiting edit mode on the same gesture as the long-press,
+    // and drives the onLayout-based focus mechanism (no arbitrary timeout needed).
+    const pendingFocusRef = useRef(false);
+    const editStartedRef = useRef(false);
+
+
     // Notify parent when editing starts (runs once when isEditing becomes true)
     // intentionally excludes onEditStart from deps to avoid calling it on every parent re-render
     useEffect(() => {
@@ -105,11 +113,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEditing]);
 
-    // Ref flag: set to true when we just entered edit mode, cleared after focus is applied.
-    // This prevents handlePress from exiting edit mode on the same gesture as the long-press,
-    // and drives the onLayout-based focus mechanism (no arbitrary timeout needed).
-    const pendingFocusRef = useRef(false);
-    const editStartedRef = useRef(false);
+
 
     // Sync pinned state and keep editFrontmatter synced with external pin toggles (e.g search updates)
     useEffect(() => {
@@ -290,44 +294,36 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
     // Notify parent of editor readiness - NO-OP now replaced by ref callback
 
     const handleQuickAdd = () => {
-        // Find the last occurrence of a checklist item to append after it
-        const lines = note.content.split('\n');
-        let lastChecklistIndex = -1;
-
-        for (let i = lines.length - 1; i >= 0; i--) {
-            if (/[-\*]\s?\[[ x]\]/i.test(lines[i])) {
-                lastChecklistIndex = i;
-                break;
-            }
+        // If external floating editor is used, delegate to parent
+        if (onQuickAddRequest) {
+            onQuickAddRequest();
+            return;
         }
-
-        let newBody;
-        if (lastChecklistIndex !== -1) {
-            const lastChecklistItem = lines[lastChecklistIndex];
-            const prefix = '- [ ] ';
-
-            lines.splice(lastChecklistIndex + 1, 0, prefix);
-            newBody = lines.join('\n');
-        } else {
-            // Should not happen if hasChecklist is true, but fallback:
-            const prefix = '- [ ] ';
-            newBody = editBody + '\n' + prefix;
-        }
-
-        // Enter edit mode immediately
-        const contentLen = newBody.length;
-        const initialSelection = { start: contentLen, end: contentLen };
 
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+
+        // Parse the note and immediately append a new checklist item
+        const parsed = FrontmatterService.parseFrontmatter(note.content);
+        const newBody = appendChecklistItem(parsed.body);
+        const newSelection = { start: newBody.length, end: newBody.length };
+
+        // Enter edit mode with the already-updated body
         pendingFocusRef.current = true;
-        setEditBody(newBody);
-        lastProcessedTextRef.current = newBody;
+
         setIsExpanded(true);
         setIsEditing(true);
-        setEditSelection(initialSelection);
-
-        // Notify parent about the change
+        setEditBody(newBody);
+        lastProcessedTextRef.current = newBody;
+        setEditFrontmatter(parsed.frontmatter);
+        setEditSelection(newSelection);
         onEditContentChange?.(newBody);
+
+        // For richtext mode: initialContentHTML is set once at WebView creation,
+        // so we must also push the updated content via setTextAndSelection after
+        // the editor is mounted. A short delay allows the WebView to initialize.
+        setTimeout(() => {
+            editorRef.current?.setTextAndSelection?.(newBody, newSelection);
+        }, 300);
     };
 
     const handleDeleteCompleted = () => {

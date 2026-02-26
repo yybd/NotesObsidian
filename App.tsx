@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NotesListScreen } from './src/screens/NotesListScreen';
-import { NoteEditorScreen } from './src/screens/NoteEditorScreen';
+
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import ObsidianService from './src/services/ObsidianService';
 import { AppState, Platform } from 'react-native';
@@ -74,15 +74,7 @@ export default function App() {
             component={NotesListScreen}
             options={{ headerShown: false }}
           />
-          <Stack.Screen
-            name="NoteEditor"
-            component={NoteEditorScreen}
-            options={{
-              headerShown: false,
-              presentation: 'modal'
-            }}
-          />
-          <Stack.Screen
+<Stack.Screen
             name="Settings"
             component={SettingsScreen}
             options={{

@@ -18,7 +18,7 @@ import { ArchiveModal } from '../components/ArchiveModal';
 import { RTL_TEXT_STYLE } from '../utils/rtlUtils';
 
 export const SettingsScreen = ({ navigation }: any) => {
-    const { settings, updateSettings, setVaultConfig, setEditorMode } = useNotesStore();
+    const { settings, updateSettings, setVaultConfig /* [INACTIVE] setEditorMode */ } = useNotesStore();
     const [vaultName, setVaultName] = useState(settings.vault?.vaultName || '');
     const [isArchiveVisible, setIsArchiveVisible] = useState(false);
 
@@ -149,7 +149,7 @@ export const SettingsScreen = ({ navigation }: any) => {
                 )}
             </View>
 
-            {/* Editor Settings */}
+            {/* [INACTIVE] Editor Settings — בחירת מצב עורך מושבתת. ברירת מחדל: richtext בלבד.
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>תצוגת עורך הטקסט</Text>
                 <Text style={styles.description}>
@@ -194,6 +194,7 @@ export const SettingsScreen = ({ navigation }: any) => {
                     </TouchableOpacity>
                 </View>
             </View>
+            */}
 
             {/* Archive Settings */}
             <View style={styles.section}>

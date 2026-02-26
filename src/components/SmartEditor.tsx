@@ -1,153 +1,218 @@
-import React, { forwardRef, useImperativeHandle, useRef, useEffect, useState } from 'react';
+// SmartEditor.tsx
+// Unified editor facade.
+// Delegates to TiptapEditor (richtext mode) or NativeLiveEditor (markdown mode).
+// Parents always receive / provide raw Markdown strings — the conversion to/from
+// HTML is handled internally here.
+
+import React, { forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
 import { StyleProp, TextStyle } from 'react-native';
+import { type EditorBridge } from '@10play/tentap-editor';
 import { NativeLiveEditor, NativeLiveEditorRef } from './NativeLiveEditor';
-import { RichTextEditor, RichTextEditorRef } from './RichTextEditor';
+import { TiptapEditor, TiptapEditorRef } from './TiptapEditor';
 import { useNotesStore } from '../stores/notesStore';
 import MarkdownConverterService from '../services/MarkdownConverterService';
 
+// ─── Public ref interface ────────────────────────────────────────────────────
+
 export interface SmartEditorRef {
+    /** Always returns the current content as raw Markdown. */
     getMarkdown: () => Promise<string>;
     focus: () => void;
     blur: () => void;
+    /** Replace content. Accepts raw Markdown. */
     setText: (text: string) => void;
+    /** Replace content and update cursor (markdown mode only). */
     setTextAndSelection: (text: string, sel: { start: number; end: number }) => void;
+    /** Move cursor (markdown mode only). */
     setSelection: (sel: { start: number; end: number }) => void;
-    getRichEditorRef: () => any;
-    sendAction: (action: any, value?: any) => void;
-    registerToolbar: (listener: (items: any[]) => void) => void;
+    /**
+     * Returns the EditorBridge for richtext mode so the toolbar can read
+     * live state and call formatting commands directly.
+     * Returns null in markdown mode.
+     */
+    getEditorBridge: () => EditorBridge | null;
+    /**
+     * Appends a new task-list item after the last existing one.
+     * In markdown mode this is handled externally via appendChecklistItem.
+     */
+    insertCheckboxItem: () => void;
 }
+
+// ─── Props ───────────────────────────────────────────────────────────────────
 
 export interface SmartEditorProps {
     initialContent: string;
     onChange?: (content: string) => void;
     onFocus?: () => void;
     onBlur?: () => void;
+    /** Fired when the WebView editor is fully initialised (richtext mode only). */
+    onEditorReady?: () => void;
     placeholder?: string;
     style?: StyleProp<TextStyle>;
     scrollEnabled?: boolean;
+    /** Background colour for the rich text editor WebView. */
+    backgroundColor?: string;
+    autoFocus?: boolean;
+    // Native TextInput-only props — accepted here so callers don't get type errors,
+    // but they are forwarded only in markdown mode (NativeLiveEditor).
+    selection?: { start: number; end: number };
+    onSelectionChange?: (e: any) => void;
     onStatusChange?: (actions: string[]) => void;
-    [key: string]: any; // Allow other props like contentInset, autoFocus, etc.
+    contentInset?: any;
+    scrollIndicatorInsets?: any;
+    [key: string]: any;
 }
 
-export const SmartEditor = forwardRef<SmartEditorRef, SmartEditorProps>(({
-    initialContent,
-    onChange,
-    onFocus,
-    onBlur,
-    placeholder,
-    style,
-    scrollEnabled = true,
-    onStatusChange,
-    ...rest
-}, ref) => {
-    const { settings } = useNotesStore();
-    const editorMode = settings.editorMode || 'richtext';
+// ─── Component ───────────────────────────────────────────────────────────────
 
-    const nativeEditorRef = useRef<NativeLiveEditorRef>(null);
-    const richEditorRef = useRef<RichTextEditorRef>(null);
+export const SmartEditor = forwardRef<SmartEditorRef, SmartEditorProps>(
+    (
+        {
+            initialContent,
+            onChange,
+            onFocus,
+            onBlur,
+            onEditorReady,
+            placeholder,
+            style,
+            scrollEnabled = true,
+            backgroundColor,
+            autoFocus,
+            // Destructure native-only props so they are not forwarded to TiptapEditor/WebView
+            selection,
+            onSelectionChange,
+            onStatusChange,
+            contentInset,
+            scrollIndicatorInsets,
+            ...rest
+        },
+        ref,
+    ) => {
+        const { settings } = useNotesStore();
+        // [INACTIVE] editorMode — תמיד richtext, בחירת מצב מושבתת
+        const editorMode = 'richtext'; // settings.editorMode || 'richtext';
 
-    // Provide a unified imperative handle to the parent
-    useImperativeHandle(ref, () => ({
-        getMarkdown: async () => {
-            if (editorMode === 'markdown') {
-                return await nativeEditorRef.current?.getMarkdown() || '';
-            } else {
-                const html = await richEditorRef.current?.getHtml() || '';
-                return MarkdownConverterService.htmlToMarkdown(html);
-            }
-        },
-        focus: () => {
-            if (editorMode === 'markdown') {
-                nativeEditorRef.current?.focus();
-            } else {
-                richEditorRef.current?.focus();
-            }
-        },
-        blur: () => {
-            if (editorMode === 'markdown') {
-                nativeEditorRef.current?.blur();
-            } else {
-                richEditorRef.current?.blur();
-            }
-        },
-        setText: (text: string) => {
-            if (editorMode === 'markdown') {
-                nativeEditorRef.current?.setText?.(text);
-            } else {
-                const html = MarkdownConverterService.markdownToHtml(text);
-                richEditorRef.current?.setHtml?.(html);
-            }
-        },
-        setTextAndSelection: (text: string, sel: { start: number; end: number }) => {
-            if (editorMode === 'markdown') {
-                nativeEditorRef.current?.setTextAndSelection?.(text, sel);
-            } else {
-                const html = MarkdownConverterService.markdownToHtml(text);
-                richEditorRef.current?.setHtml?.(html);
-            }
-        },
-        setSelection: (sel: { start: number; end: number }) => {
-            if (editorMode === 'markdown') {
-                nativeEditorRef.current?.setSelection?.(sel);
-            }
-        },
-        getRichEditorRef: () => {
-            return richEditorRef.current?.editorRef;
-        },
-        sendAction: (action: any, value?: any) => {
-            if (editorMode === 'richtext') {
-                richEditorRef.current?.sendAction(action, value);
-            }
-        },
-        registerToolbar: (listener: (items: any[]) => void) => {
-            if (editorMode === 'richtext') {
-                richEditorRef.current?.registerToolbar(listener);
-            }
-        }
-    }), [editorMode]);
+        const nativeEditorRef = useRef<NativeLiveEditorRef>(null);
+        const tiptapEditorRef = useRef<TiptapEditorRef>(null);
 
-    const handleMarkdownChange = (text: string) => {
-        onChange?.(text);
-    };
+        // Notify parent when the Tiptap WebView is ready
+        useEffect(() => {
+            if (editorMode !== 'richtext') return;
+            // TiptapEditor calls onFocus/onBlur via editorState — no extra hook needed.
+            // onEditorReady is fired from inside TiptapEditor once isReady becomes true.
+        }, [editorMode]);
 
-    const handleRichTextChange = (html: string) => {
-        const markdown = MarkdownConverterService.htmlToMarkdown(html);
-        onChange?.(markdown);
-    };
+        useImperativeHandle(
+            ref,
+            () => ({
+                getMarkdown: async () => {
+                    if (editorMode === 'markdown') {
+                        return (await nativeEditorRef.current?.getMarkdown()) || '';
+                    }
+                    const html = await tiptapEditorRef.current?.getHtml() || '';
+                    return MarkdownConverterService.htmlToMarkdown(html);
+                },
 
-    if (editorMode === 'markdown') {
+                focus: () => {
+                    editorMode === 'markdown'
+                        ? nativeEditorRef.current?.focus()
+                        : tiptapEditorRef.current?.focus();
+                },
+
+                blur: () => {
+                    editorMode === 'markdown'
+                        ? nativeEditorRef.current?.blur()
+                        : tiptapEditorRef.current?.blur();
+                },
+
+                setText: (text: string) => {
+                    if (editorMode === 'markdown') {
+                        nativeEditorRef.current?.setText?.(text);
+                    } else {
+                        tiptapEditorRef.current?.setHtml(
+                            MarkdownConverterService.markdownToHtml(text),
+                        );
+                    }
+                },
+
+                setTextAndSelection: (text: string, sel: { start: number; end: number }) => {
+                    if (editorMode === 'markdown') {
+                        nativeEditorRef.current?.setTextAndSelection?.(text, sel);
+                    } else {
+                        tiptapEditorRef.current?.setHtml(
+                            MarkdownConverterService.markdownToHtml(text),
+                        );
+                    }
+                },
+
+                setSelection: (sel: { start: number; end: number }) => {
+                    if (editorMode === 'markdown') {
+                        nativeEditorRef.current?.setSelection?.(sel);
+                    }
+                },
+
+                getEditorBridge: () => {
+                    if (editorMode !== 'richtext') return null;
+                    return tiptapEditorRef.current?.editorBridge ?? null;
+                },
+
+                insertCheckboxItem: () => {
+                    if (editorMode !== 'richtext') return;
+                    // toggleTaskList at the end of the document appends a new task item
+                    // using Tiptap's built-in ProseMirror command — no custom JS needed.
+                    const bridge = tiptapEditorRef.current?.editorBridge;
+                    if (!bridge) return;
+                    bridge.focus('end');
+                    bridge.toggleTaskList();
+                },
+            }),
+            [editorMode],
+        );
+
+        // ── [INACTIVE] Markdown mode — מושבת, תמיד משתמשים ב-richtext ──────
+        // if (editorMode === 'markdown') {
+        //     return (
+        //         <NativeLiveEditor
+        //             ref={nativeEditorRef}
+        //             initialContent={initialContent}
+        //             onChange={onChange}
+        //             onFocus={onFocus}
+        //             onBlur={onBlur}
+        //             placeholder={placeholder}
+        //             style={style}
+        //             scrollEnabled={scrollEnabled}
+        //             selection={selection}
+        //             onSelectionChange={onSelectionChange}
+        //             contentInset={contentInset}
+        //             scrollIndicatorInsets={scrollIndicatorInsets}
+        //             {...rest}
+        //         />
+        //     );
+        // }
+
+        // ── Rich-text mode ─────────────────────────────────────────────────────
+        const initialHtml = MarkdownConverterService.markdownToHtml(initialContent);
+
+        const handleRichTextChange = async (html: string) => {
+            const markdown = MarkdownConverterService.htmlToMarkdown(html);
+            onChange?.(markdown);
+        };
+
         return (
-            <NativeLiveEditor
-                ref={nativeEditorRef}
-                initialContent={initialContent}
-                onChange={handleMarkdownChange}
+            <TiptapEditor
+                ref={tiptapEditorRef}
+                initialHtml={initialHtml}
+                onChange={handleRichTextChange}
                 onFocus={onFocus}
                 onBlur={onBlur}
+                onReady={onEditorReady}
                 placeholder={placeholder}
                 style={style}
-                scrollEnabled={scrollEnabled}
-                {...rest}
+                backgroundColor={backgroundColor}
+                autoFocus={autoFocus}
             />
         );
-    }
-
-    // Convert initialization text to HTML for the rich text editor
-    const initialHtml = MarkdownConverterService.markdownToHtml(initialContent);
-
-    return (
-        <RichTextEditor
-            ref={richEditorRef}
-            initialHtml={initialHtml}
-            onChange={handleRichTextChange}
-            onFocus={onFocus}
-            onBlur={onBlur}
-            onStatusChange={onStatusChange}
-            placeholder={placeholder}
-            style={style}
-            // RichTextEditor might not support native insets out of the box, 
-            {...rest}
-        />
-    );
-});
+    },
+);
 
 SmartEditor.displayName = 'SmartEditor';

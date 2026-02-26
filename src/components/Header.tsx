@@ -93,7 +93,8 @@ const styles = StyleSheet.create({
     searchContainer: {
         paddingHorizontal: 20,
         paddingTop: 16,
-        backgroundColor: '#FFFFFF',
+        paddingBottom: 8,
+        backgroundColor: '#F0F2F5',
         zIndex: 10,
     },
 });

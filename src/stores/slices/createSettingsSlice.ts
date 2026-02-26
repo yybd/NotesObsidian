@@ -44,6 +44,7 @@ export const createSettingsSlice: StateCreator<
         get().loadNotes().catch((err) => console.error('Failed to reload notes after vault config change:', err));
     },
 
+    // [INACTIVE] setEditorMode — מושבת, תמיד משתמשים ב-richtext
     setEditorMode: (mode: 'markdown' | 'richtext') => {
         const settings = { ...get().settings, editorMode: mode };
         set({ settings });

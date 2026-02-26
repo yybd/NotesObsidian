@@ -25,6 +25,8 @@ interface MarkdownToolbarProps {
     onSelectionChangeRequest?: (selection: { start: number; end: number }) => void;
     onPinPress?: () => void;
     isPinned?: boolean;
+    /** Called when the dismiss button is pressed. If provided, runs after keyboard dismiss. */
+    onDismiss?: () => void;
 }
 
 export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
@@ -35,6 +37,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
     onSelectionChangeRequest,
     onPinPress,
     isPinned,
+    onDismiss,
 }) => {
     // Get current cursor position or selection and ensure it is mathematically ordered
     const getSelection = (): { start: number; end: number } => {
@@ -178,6 +181,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
     const dismissKeyboard = () => {
         Keyboard.dismiss();
         inputRef.current?.blur();
+        onDismiss?.();
     };
 
     return (
@@ -195,7 +199,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
                     activeOpacity={0.7}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                    <Text style={[styles.buttonText, isH1Active && styles.activeButtonText]}>H1</Text>
+                    <Text style={styles.buttonText}>H1</Text>
                 </TouchableOpacity>
 
                 {/* Bold Button */}
@@ -205,7 +209,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
                     activeOpacity={0.7}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                    <Text style={[styles.boldText, isBoldActive && styles.activeButtonText]}>B</Text>
+                    <Text style={styles.boldText}>B</Text>
                 </TouchableOpacity>
 
                 {/* List Button */}
@@ -215,7 +219,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
                     activeOpacity={0.7}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                    <Ionicons name="list" size={22} color={isListActive ? "#FFFFFF" : "#6200EE"} />
+                    <Ionicons name="list" size={22} color="#000000" />
                 </TouchableOpacity>
 
                 {/* Checkbox Button */}
@@ -225,7 +229,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
                     activeOpacity={0.7}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                    <Ionicons name="checkbox-outline" size={22} color={isCheckboxActive ? "#FFFFFF" : "#6200EE"} />
+                    <Ionicons name="checkbox-outline" size={22} color="#000000" />
                 </TouchableOpacity>
 
                 {/* Separator */}
@@ -282,16 +286,13 @@ const styles = StyleSheet.create({
     button: {
         padding: 8,
         borderRadius: 8,
-        backgroundColor: '#F5F5F5',
+        backgroundColor: 'transparent',
         minWidth: 44,
         alignItems: 'center',
         justifyContent: 'center',
     },
     activeButton: {
-        backgroundColor: '#6200EE',
-    },
-    activeButtonText: {
-        color: '#FFFFFF',
+        backgroundColor: '#F5F5F5',
     },
     boldIcon: {
         fontWeight: 'bold',
@@ -299,12 +300,12 @@ const styles = StyleSheet.create({
     buttonText: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#6200EE',
+        color: '#000000',
     },
     boldText: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#6200EE',
+        color: '#000000',
     },
     separator: {
         width: 1,
@@ -313,9 +314,9 @@ const styles = StyleSheet.create({
         marginHorizontal: 4,
     },
     dismissButton: {
-        backgroundColor: '#FFF3E0',
+        backgroundColor: 'transparent',
     },
     pinButtonActive: {
-        backgroundColor: '#E8DEF8',
+        backgroundColor: '#F5F5F5',
     },
 });

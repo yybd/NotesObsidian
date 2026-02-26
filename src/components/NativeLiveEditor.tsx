@@ -139,7 +139,7 @@ export const NativeLiveEditor = forwardRef<NativeLiveEditorRef, NativeLiveEditor
                 ref={textInputRef}
                 defaultValue={initialContent}
                 onChangeText={handleChangeText}
-                placeholder={placeholder || 'התחל לכתוב...'}
+                placeholder={placeholder || ''}
                 parser={customParser}
                 style={[
                     styles.input,
@@ -148,7 +148,7 @@ export const NativeLiveEditor = forwardRef<NativeLiveEditorRef, NativeLiveEditor
                 ]}
                 markdownStyle={{
                     syntax: { color: '#BDBDBD' },
-                    code: { color: '#6200EE', backgroundColor: '#F0F0F0' }
+                    code: { color: '#000000', backgroundColor: '#F0F0F0' }
                 }}
                 multiline
                 scrollEnabled={true}

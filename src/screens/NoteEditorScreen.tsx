@@ -9,14 +9,16 @@ import {
     TouchableOpacity,
     Text,
     SafeAreaView,
+    KeyboardAvoidingView,
+    Platform,
     ActivityIndicator,
-    ScrollView,
     StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SmartEditor, SmartEditorRef } from '../components/SmartEditor';
 import { MarkdownToolbar } from '../components/MarkdownToolbar';
-import { RichTextToolbar } from '../components/RichTextToolbar';
+import { TiptapToolbar } from '../components/TiptapToolbar';
+import { type EditorBridge } from '@10play/tentap-editor';
 import { DomainSelector } from '../components/DomainSelector';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNotesStore } from '../stores/notesStore';
@@ -31,7 +33,8 @@ export const NoteEditorScreen = ({ navigation, route }: any) => {
     const insets = useSafeAreaInsets();
     const existingNoteFromRoute = route.params?.note;
     const { createNote, updateNote, settings } = useNotesStore();
-    const editorMode = settings.editorMode || 'richtext';
+    // [INACTIVE] editorMode — תמיד richtext, בחירת מצב מושבתת
+    const editorMode = 'richtext'; // settings.editorMode || 'richtext';
 
     // Parse content immediately to separate frontmatter from body
     // We use a ref or simple const because route params don't change
@@ -54,7 +57,7 @@ export const NoteEditorScreen = ({ navigation, route }: any) => {
     const [showToast, setShowToast] = useState(false);
 
     const [editorInstance, setEditorInstance] = useState<SmartEditorRef | null>(null);
-    const [richEditorRefState, setRichEditorRefState] = useState<{ current: any } | null>(null);
+    const [editorBridge, setEditorBridge] = useState<EditorBridge | null>(null);
     // Refs for accessing state in closures (TenTap bridge callbacks)
     const domainRef = useRef(domain);
     const otherFrontmatterRef = useRef(otherFrontmatter);
@@ -103,18 +106,22 @@ export const NoteEditorScreen = ({ navigation, route }: any) => {
 
     const handleEditorChange = (rawBodyMarkdown: string) => {
         let bodyMarkdown = rawBodyMarkdown;
-        // Apply list continuation logic for enter key presses
-        const result = handleListContinuation(rawBodyMarkdown, lastProcessedTextRef.current);
 
-        if (result) {
-            bodyMarkdown = result.modifiedText;
-            lastProcessedTextRef.current = result.modifiedText;
-            if (result.cursorShouldMove) {
-                const newSelection = { start: result.newCursorPos, end: result.newCursorPos };
-                setSelection(newSelection);
-                editorRef.current?.setTextAndSelection?.(result.modifiedText, newSelection);
+        // List continuation is a markdown-only concern — Tiptap handles Enter natively.
+        if (editorMode === 'markdown') {
+            const result = handleListContinuation(rawBodyMarkdown, lastProcessedTextRef.current);
+            if (result) {
+                bodyMarkdown = result.modifiedText;
+                lastProcessedTextRef.current = result.modifiedText;
+                if (result.cursorShouldMove) {
+                    const newSelection = { start: result.newCursorPos, end: result.newCursorPos };
+                    setSelection(newSelection);
+                    editorRef.current?.setTextAndSelection?.(result.modifiedText, newSelection);
+                } else {
+                    editorRef.current?.setText?.(result.modifiedText);
+                }
             } else {
-                editorRef.current?.setText?.(result.modifiedText);
+                lastProcessedTextRef.current = bodyMarkdown;
             }
         } else {
             lastProcessedTextRef.current = bodyMarkdown;
@@ -216,7 +223,12 @@ export const NoteEditorScreen = ({ navigation, route }: any) => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+        <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={0}
+        >
             {/* Custom Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={handleBack} style={styles.headerButton}>
@@ -275,20 +287,20 @@ export const NoteEditorScreen = ({ navigation, route }: any) => {
                     <DomainSelector
                         selectedDomain={domain}
                         onSelectDomain={setDomain}
+                        compact
                     />
                 </View>
             )}
 
-            {/* Rich Text Editor */}
-            <View style={styles.editorContainer}>
+            {/* Rich Text Editor — WebView grows with content via dynamicHeight */}
+            <View style={styles.editorScrollView}>
                 <SmartEditor
                     ref={(ref) => {
                         editorRef.current = ref;
                         if (ref && ref !== editorInstance) {
                             setEditorInstance(ref);
                             if (editorMode === 'richtext') {
-                                const rRef = ref.getRichEditorRef?.() ?? null;
-                                setRichEditorRefState(rRef);
+                                setEditorBridge(ref.getEditorBridge());
                             }
                         }
                     }}
@@ -296,19 +308,13 @@ export const NoteEditorScreen = ({ navigation, route }: any) => {
                     onChange={handleEditorChange}
                     onSelectionChange={(e: any) => setSelection(e.nativeEvent.selection)}
                     autoFocus={true}
-                    style={{ flex: 1, paddingVertical: 12 }}
-                    contentInset={{ bottom: isKeyboardVisible ? 70 : 0 }}
-                    scrollIndicatorInsets={{ bottom: isKeyboardVisible ? 70 : 0 }}
+                    backgroundColor="#FFFFFF"
                 />
             </View>
 
-            {/* Floating Toolbar - positioned above keyboard */}
-            <View style={[
-                styles.toolbarWrapper,
-                {
-                    bottom: isKeyboardVisible ? keyboardHeight : insets.bottom,
-                }
-            ]}>
+            {/* Toolbar — in flow, sits above keyboard thanks to KeyboardAvoidingView */}
+            <View style={[styles.toolbarWrapper, { paddingBottom: isKeyboardVisible ? 0 : Math.max(insets.bottom, 16) }]}>
+                {/* [INACTIVE] markdown toolbar — מושבת, תמיד משתמשים ב-richtext
                 {editorMode === 'markdown' ? (
                     <MarkdownToolbar
                         inputRef={editorRef as any}
@@ -320,13 +326,14 @@ export const NoteEditorScreen = ({ navigation, route }: any) => {
                         selection={selection}
                         onSelectionChangeRequest={setSelection}
                     />
-                ) : (
-                    <RichTextToolbar
-                        richEditorRef={richEditorRefState as any}
+                ) : */}
+                {editorBridge ? (
+                    <TiptapToolbar
+                        editor={editorBridge}
                         onPinPress={() => setIsPinned(!isPinned)}
                         isPinned={isPinned}
                     />
-                )}
+                ) : null}
             </View>
 
             {/* Helper FAB for adding checklist items */}
@@ -338,14 +345,15 @@ export const NoteEditorScreen = ({ navigation, route }: any) => {
                     <Ionicons name="add" size={30} color="#FFFFFF" />
                 </TouchableOpacity>
             )}
-        </SafeAreaView>
+        </KeyboardAvoidingView>
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#F0F2F5',
     },
     header: {
         flexDirection: 'row',
@@ -373,12 +381,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     titleContainer: {
+        backgroundColor: '#FFFFFF',
         borderBottomWidth: 1,
         borderBottomColor: '#E0E0E0',
         paddingHorizontal: 20,
         paddingVertical: 12,
     },
     domainContainer: {
+        backgroundColor: '#FFFFFF',
         paddingHorizontal: 0,
         paddingTop: 8,
         borderBottomWidth: 1,
@@ -390,26 +400,17 @@ const styles = StyleSheet.create({
         color: '#1A1A1A',
         ...RTL_TEXT_STYLE,
     },
-    editorContainer: {
+    editorScrollView: {
         flex: 1,
-        paddingHorizontal: 20,
+        margin: 12,
+        borderRadius: 12,
+        backgroundColor: '#FFFFFF',
+        overflow: 'hidden',
     },
     toolbarWrapper: {
-        position: 'absolute',
-        left: 0,
-        right: 0,
         backgroundColor: '#FFFFFF',
         borderTopWidth: 1,
         borderTopColor: '#E0E0E0',
-        zIndex: 9999,
-        elevation: 10,
-        shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: -2,
-        },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
     },
     toolbarContent: {
         flexDirection: 'row',

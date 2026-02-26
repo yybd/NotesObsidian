@@ -44,11 +44,14 @@ interface NoteCardProps {
     onStatusChange?: (actions: string[]) => void;
     externalEditContent?: string; // Content controlled by parent (for toolbar updates)
     externalIsPinned?: boolean; // Pinned state controlled by parent
-    maxEditHeight?: number; // Dynamic max height for editor, calculated by parent
+    maxEditHeight?: number; // Dynamic max height for editor, calculated by parent (unused in richtext mode)
+    /** Extra horizontal space (left+right) consumed by ancestors. Used for WebView width calculation. */
+    editorHorizontalInset?: number;
     autoEdit?: boolean; // Start in edit mode immediately
     forceExitEdit?: boolean; // Force exit edit mode (when another card starts editing)
     onEditRequest?: () => void; // Request external editing instead of inline
     onQuickAddRequest?: () => void; // Request external editing + append checklist item
+    onEditorReady?: () => void; // Fired when the rich text editor WebView is initialized
     style?: StyleProp<ViewStyle>;
 }
 
@@ -69,7 +72,7 @@ const stripMarkdown = (text: string): string => {
         .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
 };
 
-export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onDismissKeyboard, onSync, onEditStart, onEditEnd, onEditContentChange, onEditSelectionChange, onStatusChange, externalEditContent, externalIsPinned, maxEditHeight, autoEdit, forceExitEdit, onEditRequest, onQuickAddRequest, style }) => {
+export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onDismissKeyboard, onSync, onEditStart, onEditEnd, onEditContentChange, onEditSelectionChange, onStatusChange, externalEditContent, externalIsPinned, maxEditHeight, editorHorizontalInset = 64, autoEdit, forceExitEdit, onEditRequest, onQuickAddRequest, onEditorReady, style }) => {
     // Parse content upfront for autoEdit mode
     const initialParsed = autoEdit ? FrontmatterService.parseFrontmatter(note.content) : null;
 
@@ -188,7 +191,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
             editStartedRef.current = false;
             return;
         }
-        
+
         if (isEditing) {
             // Do not close the editor when tapping inside the card
             // This allows the user to tap the text freely to move the cursor
@@ -449,7 +452,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
                 <View style={styles.headerRight}>
                     {isEditing && (
                         <TouchableOpacity onPress={handleDone} style={styles.doneButton} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-                            <Ionicons name="checkmark-circle" size={32} color="#6200EE" />
+                            <Ionicons name="checkmark-circle" size={32} color="#000000" />
                         </TouchableOpacity>
                     )}
                 </View>
@@ -480,7 +483,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
             {/* Content - view or edit mode */}
             {isEditing ? (
                 <View
-                    style={[{ flex: 1 }, maxEditHeight ? { maxHeight: maxEditHeight } : {}]}
+                    style={maxEditHeight ? { maxHeight: maxEditHeight } : undefined}
                     onLayout={() => {
                         // Event-driven focus: fires when the editor container
                         // is actually laid out — works regardless of device speed.
@@ -501,8 +504,8 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
                             onEditSelectionChange?.(newSelection);
                         }}
                         onStatusChange={onStatusChange}
+                        onEditorReady={onEditorReady}
                         autoFocus={autoEdit}
-                        style={{ flex: 1, minHeight: 80 }}
                         contentInset={{ bottom: 0 }}
                         scrollIndicatorInsets={{ bottom: 0 }}
                     />
@@ -540,14 +543,14 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
                         onPress={handleQuickAdd}
                         style={styles.quickAddButtonInline}
                     >
-                        <Ionicons name="add-circle" size={32} color="#6200EE" />
+                        <Ionicons name="add-circle" size={32} color="#000000" />
                     </TouchableOpacity>
 
                     <TouchableOpacity
                         onPress={handleDeleteCompleted}
                         style={[styles.quickAddButtonInline, { marginLeft: 24 }]}
                     >
-                        <MaterialCommunityIcons name="broom" size={28} color="#D32F2F" />
+                        <MaterialCommunityIcons name="broom" size={28} color="#000000" />
                     </TouchableOpacity>
                 </View>
             )}
@@ -595,7 +598,7 @@ const styles = StyleSheet.create({
     },
     cardEditing: {
         borderWidth: 2,
-        borderColor: '#6200EE',
+        borderColor: '#000000',
     },
     header: {
         flexDirection: 'row',
@@ -729,7 +732,7 @@ const styles = StyleSheet.create({
     },
     quickAddText: {
         marginLeft: 8,
-        color: '#6200EE',
+        color: '#000000',
         fontWeight: '600',
         fontSize: 16,
     },

@@ -439,7 +439,7 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
                             <MaterialCommunityIcons
                                 name={isPinned ? "pin" : "pin-outline"}
                                 size={20}
-                                color={isPinned ? "#FFC107" : (isEditing ? "#BDBDBD" : "transparent")}
+                                color={isPinned ? "#000000" : (isEditing ? "#000000" : "transparent")}
                                 style={styles.pinIcon}
                             />
                         </TouchableOpacity>

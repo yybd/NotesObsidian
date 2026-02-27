@@ -141,7 +141,7 @@ export const EditorModal = React.forwardRef<EditorModalRef, EditorModalProps>(({
             <View style={[styles.modalOverlay, { paddingTop: insets.top }]}>
                 <KeyboardAvoidingView
                     style={{ flex: 1 }}
-                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    behavior="padding"
                     keyboardVerticalOffset={0}
                 >
                     {/* Tap backdrop to close */}
@@ -264,6 +264,7 @@ const styles = StyleSheet.create({
     },
     bottomBar: {
         flexDirection: 'row',
+        direction: 'ltr',
         alignItems: 'center',
         justifyContent: 'space-between',
         backgroundColor: '#FFFFFF',

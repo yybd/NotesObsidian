@@ -6,6 +6,7 @@
 import React from 'react';
 import {
     View,
+    ScrollView,
     StyleSheet,
     TouchableOpacity,
     Keyboard,
@@ -38,88 +39,92 @@ export const TiptapToolbar: React.FC<TiptapToolbarProps> = ({
     const editorState = useBridgeState(editor);
 
     return (
-        <View style={styles.container}>
-            <View style={styles.row}>
+        <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.container}
+            contentContainerStyle={styles.row}
+            keyboardShouldPersistTaps="always"
+        >
 
-                {/* H1 */}
-                <ToolBtn
-                    active={editorState.headingLevel === 1}
-                    onPress={() => editor.toggleHeading(1)}
-                >
-                    <Text style={styles.label}>
-                        H1
-                    </Text>
-                </ToolBtn>
+            {/* H1 */}
+            <ToolBtn
+                active={editorState.headingLevel === 1}
+                onPress={() => editor.toggleHeading(1)}
+            >
+                <Text style={styles.label}>
+                    H1
+                </Text>
+            </ToolBtn>
 
-                {/* Bold */}
-                <ToolBtn
-                    active={editorState.isBoldActive}
-                    onPress={() => editor.toggleBold()}
-                >
-                    <Text style={styles.labelBold}>
-                        B
-                    </Text>
-                </ToolBtn>
+            {/* Bold */}
+            <ToolBtn
+                active={editorState.isBoldActive}
+                onPress={() => editor.toggleBold()}
+            >
+                <Text style={styles.labelBold}>
+                    B
+                </Text>
+            </ToolBtn>
 
-                {/* Bullet list */}
-                <ToolBtn
-                    active={editorState.isBulletListActive}
-                    onPress={() => editor.toggleBulletList()}
-                >
-                    <Ionicons
-                        name="list"
-                        size={22}
-                        color="#000000"
-                    />
-                </ToolBtn>
+            {/* Bullet list */}
+            <ToolBtn
+                active={editorState.isBulletListActive}
+                onPress={() => editor.toggleBulletList()}
+            >
+                <Ionicons
+                    name="list"
+                    size={22}
+                    color="#000000"
+                />
+            </ToolBtn>
 
-                {/* Task / checkbox list */}
-                <ToolBtn
-                    active={editorState.isTaskListActive}
-                    onPress={() => editor.toggleTaskList()}
-                >
-                    <Ionicons
-                        name="checkbox-outline"
-                        size={22}
-                        color="#000000"
-                    />
-                </ToolBtn>
+            {/* Task / checkbox list */}
+            <ToolBtn
+                active={editorState.isTaskListActive}
+                onPress={() => editor.toggleTaskList()}
+            >
+                <Ionicons
+                    name="checkbox-outline"
+                    size={22}
+                    color="#000000"
+                />
+            </ToolBtn>
 
-                {/* Separator */}
-                <View style={styles.vSeparator} />
+            {/* Separator */}
+            <View style={styles.vSeparator} />
 
-                {/* Pin */}
-                {onPinPress && (
-                    <TouchableOpacity
-                        onPress={onPinPress}
-                        style={[styles.btn, isPinned && styles.pinActive]}
-                        activeOpacity={0.7}
-                        hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
-                    >
-                        <MaterialCommunityIcons
-                            name={isPinned ? 'pin' : 'pin-outline'}
-                            size={22}
-                            color={isPinned ? '#FFC107' : '#666'}
-                        />
-                    </TouchableOpacity>
-                )}
-
-                {/* Dismiss keyboard / close */}
+            {/* Pin */}
+            {onPinPress && (
                 <TouchableOpacity
-                    onPress={() => {
-                        editor.blur();
-                        Keyboard.dismiss();
-                        onDismiss?.();
-                    }}
-                    style={[styles.btn, styles.dismissBtn]}
+                    onPress={onPinPress}
+                    style={[styles.btn, isPinned && styles.pinActive]}
                     activeOpacity={0.7}
                     hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
                 >
-                    <Ionicons name="chevron-down" size={22} color="#666" />
+                    <MaterialCommunityIcons
+                        name={isPinned ? 'pin' : 'pin-outline'}
+                        size={22}
+                        color={isPinned ? '#FFC107' : '#666'}
+                    />
                 </TouchableOpacity>
+            )}
 
-            </View>
-        </View>
+            {/* Dismiss keyboard / close */}
+            <TouchableOpacity
+                onPress={() => {
+                    editor.blur();
+                    Keyboard.dismiss();
+                    onDismiss?.();
+                }}
+                style={[styles.btn, styles.dismissBtn]}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
+            >
+                <Ionicons name="chevron-down" size={22} color="#666" />
+            </TouchableOpacity>
+
+        </ScrollView>
     );
 };
 
@@ -165,7 +170,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'transparent',
         alignItems: 'center',
         justifyContent: 'center',
-        marginHorizontal: 6,
+        marginHorizontal: 2,
     },
     btnActive: {
         backgroundColor: '#F5F5F5',

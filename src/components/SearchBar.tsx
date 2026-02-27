@@ -14,7 +14,7 @@ interface SearchBarProps {
 
 export const SearchBar = forwardRef<TextInput, SearchBarProps>(({
     onSearch,
-    placeholder = 'חפש פתקים...',
+    placeholder = '',
     onFocus,
     onBlur
 }, ref) => {

@@ -84,7 +84,7 @@ export const QuickAddInput = forwardRef<QuickAddInputRef, QuickAddInputProps>(({
                     activeOpacity={0.7}
                 >
                     <Text style={previewText ? styles.previewText : styles.placeholder} numberOfLines={1}>
-                        {previewText ?? 'כתוב פתק מהיר...'}
+                        {previewText ?? ''}
                     </Text>
                 </TouchableOpacity>
 
@@ -123,6 +123,7 @@ QuickAddInput.displayName = 'QuickAddInput';
 const styles = StyleSheet.create({
     bar: {
         flexDirection: 'row',
+        direction: 'ltr',
         alignItems: 'center',
         backgroundColor: '#F0F2F5',
         borderTopWidth: 1,

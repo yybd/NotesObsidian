@@ -105,7 +105,7 @@ export const TiptapToolbar: React.FC<TiptapToolbarProps> = ({
                     <MaterialCommunityIcons
                         name={isPinned ? 'pin' : 'pin-outline'}
                         size={22}
-                        color={isPinned ? '#FFC107' : '#666'}
+                        color={isPinned ? '#000000' : '#666'}
                     />
                 </TouchableOpacity>
             )}

@@ -7,6 +7,7 @@ export interface SettingsSlice {
     settings: AppSettings;
     updateSettings: (settings: Partial<AppSettings>) => void;
     setVaultConfig: (config: ObsidianVaultConfig) => void;
+    reconnectWebVault: () => Promise<void>;
     setEditorMode: (mode: 'markdown' | 'richtext') => void;
 }
 
@@ -42,6 +43,14 @@ export const createSettingsSlice: StateCreator<
         set({ settings });
         StorageService.setConfig(config);
         get().loadNotes().catch((err) => console.error('Failed to reload notes after vault config change:', err));
+    },
+
+    reconnectWebVault: async () => {
+        const granted = await StorageService.verifyPermission();
+        set({ isVaultPermissionGranted: granted });
+        if (granted) {
+            get().loadNotes().catch(err => console.error('Failed to reload notes after reconnection:', err));
+        }
     },
 
     // [INACTIVE] setEditorMode — מושבת, תמיד משתמשים ב-richtext

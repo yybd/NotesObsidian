@@ -8,6 +8,7 @@ import { StoreState } from '../notesStore';
 export interface DataSlice {
     notes: Note[];
     filteredNotes: Note[];
+    isVaultPermissionGranted: boolean;
     loadNotes: () => Promise<void>;
     createNote: (title: string, content: string) => Promise<Note>;
     updateNote: (id: string, filePath: string, content: string, skipSort?: boolean) => Promise<Note>;
@@ -25,6 +26,7 @@ export const createDataSlice: StateCreator<
 > = (set, get) => ({
     notes: [],
     filteredNotes: [],
+    isVaultPermissionGranted: true, // Default to true, update in loadNotes
 
     loadNotes: async () => {
         set({ isLoading: true, error: null });
@@ -32,6 +34,8 @@ export const createDataSlice: StateCreator<
             const currentSettings = get().settings;
             if (currentSettings.vault) {
                 StorageService.setConfig(currentSettings.vault);
+                const granted = await StorageService.verifyPermission();
+                set({ isVaultPermissionGranted: granted });
             }
 
             const currentNotes = get().notes;

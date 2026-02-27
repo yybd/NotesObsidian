@@ -9,6 +9,7 @@ export class WebStorageProvider implements StorageProvider {
 
     private async getWebFileService(): Promise<any> {
         const WebFileService = require('../WebFileService').default;
+        // initialize checks permission but doesn't request it
         await WebFileService.initialize();
         return WebFileService;
     }
@@ -26,43 +27,33 @@ export class WebStorageProvider implements StorageProvider {
         return null;
     }
 
-    async list(subDirectory: string = ''): Promise<FileStat[]> {
-        if (subDirectory) {
-            console.warn('Listing archived notes for external web storage is currently unsupported');
-            return [];
-        }
-
+    async verifyPermission(): Promise<boolean> {
         const WebFileService = await this.getWebFileService();
-        const files: string[] = await WebFileService.listMarkdownFiles();
+        return await WebFileService.verifyPermission(true);
+    }
 
-        return files.map((file: string) => ({
-            name: file,
-            // WebFileService doesn't expose mod time directly easily in current list
-            modificationTime: Date.now()
+    async list(subDirectory: string = ''): Promise<FileStat[]> {
+        const WebFileService = await this.getWebFileService();
+        const files: { name: string; modificationTime: number }[] = await WebFileService.listMarkdownFiles(subDirectory);
+
+        return files.map(file => ({
+            name: file.name,
+            modificationTime: file.modificationTime
         }));
     }
 
     async read(fileName: string, subDirectory: string = ''): Promise<string> {
-        if (subDirectory) throw new Error('Web storage does not currently support subdirectories');
         const WebFileService = await this.getWebFileService();
-        return await WebFileService.readFile(fileName);
+        return await WebFileService.readFile(fileName, subDirectory);
     }
 
     async write(fileName: string, content: string, subDirectory: string = ''): Promise<void> {
-        if (subDirectory) {
-            console.warn('Subdirectories not supported on Web OPFS fallback');
-            return; // Web archiving is unsupported natively via this API
-        }
         const WebFileService = await this.getWebFileService();
-        await WebFileService.writeFile(fileName, content);
+        await WebFileService.writeFile(fileName, content, subDirectory);
     }
 
     async delete(fileName: string, subDirectory: string = ''): Promise<void> {
-        if (subDirectory) {
-            console.warn('Subdirectories not supported on Web OPFS fallback');
-            return;
-        }
         const WebFileService = await this.getWebFileService();
-        await WebFileService.deleteFile(fileName);
+        await WebFileService.deleteFile(fileName, subDirectory);
     }
 }

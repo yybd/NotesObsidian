@@ -19,6 +19,9 @@ export interface StorageProvider {
     /** Connect/Select external folder if applicable */
     selectFolder?(): Promise<ObsidianVaultConfig | null>;
 
+    /** Verify/Request permission (Web specific) */
+    verifyPermission?(): Promise<boolean>;
+
     /** Get all markdown files in the specified directory */
     list(subDirectory?: string): Promise<FileStat[]>;
 

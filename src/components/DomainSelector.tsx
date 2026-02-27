@@ -26,7 +26,7 @@ export const DomainSelector: React.FC<DomainSelectorProps> = ({ selectedDomain, 
 
     // ── Collapsed state (select mode only) ──
     if (isCollapsed) {
-        if (selectedDomain) {
+        if (selectedDomain && DOMAINS[selectedDomain]) {
             const config = DOMAINS[selectedDomain];
             return (
                 <View style={[styles.collapsedRow, style]}>

@@ -6,7 +6,7 @@
 
 import React, { forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
 import { StyleProp, TextStyle } from 'react-native';
-import { type EditorBridge } from '@10play/tentap-editor';
+import type { EditorBridge } from '@10play/tentap-editor';
 import { NativeLiveEditor, NativeLiveEditorRef } from './NativeLiveEditor';
 import { TiptapEditor, TiptapEditorRef } from './TiptapEditor';
 import { useNotesStore } from '../stores/notesStore';
@@ -90,7 +90,7 @@ export const SmartEditor = forwardRef<SmartEditorRef, SmartEditorProps>(
     ) => {
         const { settings } = useNotesStore();
         // [INACTIVE] editorMode — תמיד richtext, בחירת מצב מושבתת
-        const editorMode = 'richtext'; // settings.editorMode || 'richtext';
+        const editorMode: 'richtext' | 'markdown' = 'richtext'; // settings.editorMode || 'richtext';
 
         const nativeEditorRef = useRef<NativeLiveEditorRef>(null);
         const tiptapEditorRef = useRef<TiptapEditorRef>(null);

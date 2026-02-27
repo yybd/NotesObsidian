@@ -186,22 +186,6 @@ export const EditorModal = React.forwardRef<EditorModalRef, EditorModalProps>(({
 
                         {/* Toolbar + Save */}
                         <View style={[styles.bottomBar, { paddingBottom: isKeyboardVisible ? 0 : Math.max(insets.bottom, 16) }]}>
-                            {/* [INACTIVE] markdown toolbar — מושבת, תמיד משתמשים ב-richtext
-                            {editorMode === 'markdown' && editorInstance ? (
-                                <MarkdownToolbar
-                                    inputRef={editorRef as any}
-                                    text={text}
-                                    onTextChange={onTextChange}
-                                    selection={selectionRef.current}
-                                    onSelectionChangeRequest={(sel) => {
-                                        editorRef.current?.setSelection?.(sel);
-                                        selectionRef.current = sel;
-                                    }}
-                                    onPinPress={() => onPinChange(!isPinned)}
-                                    isPinned={isPinned}
-                                    onDismiss={handleClose}
-                                />
-                            ) : */}
                             {editorBridge ? (
                                 <TiptapToolbar
                                     editor={editorBridge}
@@ -281,15 +265,17 @@ const styles = StyleSheet.create({
     bottomBar: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
         backgroundColor: '#FFFFFF',
         borderTopWidth: 1,
         borderTopColor: '#E0E0E0',
+        paddingHorizontal: 4,
     },
     sendButtonModal: {
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: '#6200EE',
+        backgroundColor: '#000000',
         justifyContent: 'center',
         alignItems: 'center',
         marginHorizontal: 8,

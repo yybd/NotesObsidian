@@ -56,6 +56,13 @@ class StorageService {
         throw new Error('External storage is not supported on this platform');
     }
 
+    async verifyPermission(): Promise<boolean> {
+        if (this.externalProvider && this.externalProvider.verifyPermission) {
+            return await this.externalProvider.verifyPermission();
+        }
+        return true; // Assume granted for basic providers or if not supported
+    }
+
     async listNotes(cachedNotes: Note[] = []): Promise<Note[]> {
         try {
             const provider = this.activeProvider;

@@ -40,6 +40,8 @@ export const NotesListScreen = ({ navigation }: any) => {
         currentDomain,
         filterByDomain,
         settings,
+        isVaultPermissionGranted,
+        reconnectWebVault,
     } = useNotesStore();
 
     const [quickNoteText, setQuickNoteText] = useState('');
@@ -119,6 +121,13 @@ export const NotesListScreen = ({ navigation }: any) => {
         oldText: string,
         setText: (text: string) => void,
     ) => {
+        // Skip for web platform as Tiptap handles its own list logic
+        // and this helper interferes with the Markdown output from SmartEditor.
+        if (Platform.OS === 'web') {
+            setText(newText);
+            return;
+        }
+
         const result = handleListContinuation(newText, oldText);
 
         if (result) {
@@ -132,7 +141,7 @@ export const NotesListScreen = ({ navigation }: any) => {
         } else {
             setText(newText);
         }
-    }, []);
+    }, [setQuickNoteText]);
 
     // Handle inline note update
     const handleUpdateNote = useCallback(async (note: Note, newContent: string) => {
@@ -295,6 +304,7 @@ export const NotesListScreen = ({ navigation }: any) => {
                         note={item}
                         style={{ marginBottom: 0 }}
                         onUpdate={(content) => handleUpdateNote(item, content)}
+                        onArchive={() => handleArchive(item)}
                         onEditRequest={() => openEditModal(item)}
                         onQuickAddRequest={() => openEditModal(item)}
                     />
@@ -316,6 +326,8 @@ export const NotesListScreen = ({ navigation }: any) => {
                 currentDomain={currentDomain}
                 onFilterByDomain={filterByDomain}
                 hideSearchAndDomain={isQuickNoteActive}
+                showReconnect={Platform.OS === 'web' && !!settings.vault && !isVaultPermissionGranted}
+                onReconnect={reconnectWebVault}
             />
 
             {/* Notes List */}
@@ -380,6 +392,7 @@ export const NotesListScreen = ({ navigation }: any) => {
                         onDomainChange={setQuickNoteDomain}
                         onSend={handleSendNote}
                         onFocus={() => setIsQuickNoteActive(true)}
+                        onBlur={() => setIsQuickNoteActive(false)}
                     />
                 </View>
             )}

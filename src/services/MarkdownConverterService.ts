@@ -27,32 +27,60 @@ class MarkdownConverterService {
     static markdownToHtml(markdown: string): string {
         if (!markdown) return '';
         try {
-            // marked with gfm:true emits <input disabled type="checkbox"> inside <li>
-            let html = marked.parse(markdown, { gfm: true, breaks: true }) as string;
+            // 0. Pre-process markdown to normalize task items.
+            // We use a unique marker that is highly unlikely to appear in natural text.
+            // We preserve the list bullet structure so marked still sees it as a list item.
+            let preprocessed = markdown.replace(/^(\s*[-*+]\s*)\[ \]\s*/gm, '$1TASK_UNCHECKED_MARKER ');
+            preprocessed = preprocessed.replace(/^(\s*[-*+]\s*)\[[xX]\]\s*/gm, '$1TASK_CHECKED_MARKER ');
 
-            // Convert marked's <li><input disabled> into Tiptap taskItem format.
-            // Match any <li> containing an <input type="checkbox"> regardless of
-            // attribute order (marked may emit checked/disabled/type in any order).
-            // The <input> may be wrapped in <p> depending on the marked version.
+            let html = marked.parse(preprocessed, { gfm: true, breaks: true }) as string;
+
+            // 1. Convert our markers OR marked's own GFM output into Tiptap taskItem format.
+
+            // Handle our markers
             html = html.replace(
-                /<li>\s*(?:<p>\s*)?<input[^>]*type="checkbox"[^>]*\/?>\s*([\s\S]*?)\s*(?:<\/p>)?\s*<\/li>/gi,
-                (_match, content) => {
-                    // Check for "checked" as a standalone attribute on the <input> tag,
-                    // not inside "checkbox" or in the content text (e.g. "unchecked").
-                    const isChecked = /<input\b[^>]*?\bchecked\b/i.test(_match);
-                    const cleanContent = content.trim();
+                /<li>\s*(?:<p>\s*)?TASK_(UNCHECKED|CHECKED)_MARKER\s*([\s\S]*?)\s*(?:<\/p>)?\s*<\/li>/gi,
+                (_match, type, content) => {
+                    const isChecked = type === 'CHECKED';
                     return (
                         `<li data-type="taskItem" data-checked="${isChecked}">` +
-                        `<label></label><div><p>${cleanContent}</p></div>` +
+                        `<label></label><div><p>${content.trim()}</p></div>` +
                         `</li>`
                     );
                 },
             );
 
-            // Wrap the converted <li data-type="taskItem"> items in a taskList <ul>
+            // Handle marked's GFM output (<input type="checkbox">)
             html = html.replace(
-                /<ul>((?:(?!<\/ul>)[\s\S])*?data-type="taskItem"(?:(?!<\/ul>)[\s\S])*?)<\/ul>/gi,
-                '<ul data-type="taskList">$1</ul>',
+                /<li[^>]*>\s*(?:<p>\s*)?<input[^>]*type="checkbox"[^>]*\/?>\s*([\s\S]*?)\s*(?:<\/p>)?\s*<\/li>/gi,
+                (_match, content) => {
+                    const isChecked = /<input\b[^>]*?\bchecked\b/i.test(_match);
+                    return (
+                        `<li data-type="taskItem" data-checked="${isChecked}">` +
+                        `<label></label><div><p>${content.trim()}</p></div>` +
+                        `</li>`
+                    );
+                },
+            );
+
+            // 2. Extra Robustness: Catch literal "[ ]" that might have survived inside ANY <li>
+            html = html.replace(
+                /<li>\s*(?:<p>\s*)?\[([ xX])\]\s*([\s\S]*?)\s*(?:<\/p>)?\s*<\/li>/gi,
+                (_match, type, content) => {
+                    const isChecked = type.toLowerCase() === 'x';
+                    return (
+                        `<li data-type="taskItem" data-checked="${isChecked}">` +
+                        `<label></label><div><p>${content.trim()}</p></div>` +
+                        `</li>`
+                    );
+                },
+            );
+
+            // 3. Wrap ALL specifically converted <li data-type="taskItem"> items in a taskList <ul>
+            // Also handle <ol> if marked outputted that for some reason.
+            html = html.replace(
+                /<(ul|ol)>([\s\S]*?data-type="taskItem"[\s\S]*?)<\/\1>/gi,
+                '<ul data-type="taskList">$2</ul>',
             );
 
             return html;

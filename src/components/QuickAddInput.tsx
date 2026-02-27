@@ -21,6 +21,7 @@ interface QuickAddInputProps {
     onDomainChange: (domain: DomainType | null) => void;
     onSend: () => void;
     onFocus: () => void;
+    onBlur?: () => void;
 }
 
 export interface QuickAddInputRef {
@@ -40,6 +41,7 @@ export const QuickAddInput = forwardRef<QuickAddInputRef, QuickAddInputProps>(({
     onDomainChange,
     onSend,
     onFocus,
+    onBlur,
 }, ref) => {
     const [modalVisible, setModalVisible] = useState(false);
     const editorModalRef = useRef<EditorModalRef>(null);
@@ -64,6 +66,10 @@ export const QuickAddInput = forwardRef<QuickAddInputRef, QuickAddInputProps>(({
 
     const handleClose = () => {
         setModalVisible(false);
+        onTextChange('');
+        onPinChange(false);
+        onDomainChange(null);
+        onBlur?.();
     };
 
     const previewText = text.trim() || null;

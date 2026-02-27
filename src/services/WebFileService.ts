@@ -23,9 +23,9 @@ class WebFileService {
             const handle = await getDirectoryHandle();
             if (handle) {
                 this.directoryHandle = handle;
-                // Verify permission
-                const permission = await this.verifyPermission(handle, false);
-                return permission;
+                // Query permission (but don't request, as it needs user gesture)
+                const status = await handle.queryPermission({ mode: 'readwrite' });
+                return status === 'granted';
             }
         } catch (error) {
             console.error('Error initializing web file service:', error);
@@ -62,37 +62,61 @@ class WebFileService {
     /**
      * Verify and request permission
      */
-    async verifyPermission(handle: FileSystemDirectoryHandle, readWrite: boolean): Promise<boolean> {
+    async verifyPermission(readWrite: boolean = true): Promise<boolean> {
+        if (!this.directoryHandle) return false;
+
         const options: FileSystemHandlePermissionDescriptor = {
             mode: readWrite ? 'readwrite' : 'read',
         };
 
-        if ((await handle.queryPermission(options)) === 'granted') {
+        if ((await this.directoryHandle.queryPermission(options)) === 'granted') {
             return true;
         }
 
-        if ((await handle.requestPermission(options)) === 'granted') {
-            return true;
+        try {
+            if ((await this.directoryHandle.requestPermission(options)) === 'granted') {
+                return true;
+            }
+        } catch (e) {
+            console.warn('Permission request failed (likely needs user gesture):', e);
         }
 
         return false;
     }
 
     /**
-     * List all markdown files recursively (or flat for now)
+     * Get a handle for a subdirectory, creating it if needed
      */
-    async listMarkdownFiles(): Promise<string[]> {
+    private async getSubDirHandle(subDirName: string, create: boolean = false): Promise<FileSystemDirectoryHandle | null> {
+        if (!this.directoryHandle) return null;
+        if (!subDirName) return this.directoryHandle;
+
+        try {
+            return await this.directoryHandle.getDirectoryHandle(subDirName, { create });
+        } catch (error) {
+            if (!create) return null;
+            throw error;
+        }
+    }
+
+    /**
+     * List all markdown files in a directory
+     */
+    async listMarkdownFiles(subDir?: string): Promise<{ name: string; modificationTime: number }[]> {
         if (!this.directoryHandle) return [];
 
-        const files: string[] = [];
+        const files: { name: string; modificationTime: number }[] = [];
         try {
-            // Verify permission first
-            const hasPermission = await this.verifyPermission(this.directoryHandle, false);
-            if (!hasPermission) return [];
+            const dirHandle = subDir ? await this.getSubDirHandle(subDir) : this.directoryHandle;
+            if (!dirHandle) return [];
 
-            for await (const entry of this.directoryHandle.values()) {
+            for await (const entry of (dirHandle as any).values()) {
                 if (entry.kind === 'file' && entry.name.endsWith('.md')) {
-                    files.push(entry.name);
+                    const file = await entry.getFile();
+                    files.push({
+                        name: entry.name,
+                        modificationTime: file.lastModified
+                    });
                 }
             }
         } catch (error) {
@@ -104,15 +128,18 @@ class WebFileService {
     /**
      * Read file content
      */
-    async readFile(filename: string): Promise<string> {
+    async readFile(filename: string, subDir?: string): Promise<string> {
         if (!this.directoryHandle) throw new Error('No directory selected');
 
         try {
-            const fileHandle = await this.directoryHandle.getFileHandle(filename);
+            const dirHandle = subDir ? await this.getSubDirHandle(subDir) : this.directoryHandle;
+            if (!dirHandle) throw new Error(`Directory ${subDir} not found`);
+
+            const fileHandle = await dirHandle.getFileHandle(filename);
             const file = await fileHandle.getFile();
             return await file.text();
         } catch (error) {
-            console.error(`Error reading ${filename}:`, error);
+            console.error(`Error reading ${filename} in ${subDir || 'root'}:`, error);
             throw error;
         }
     }
@@ -120,19 +147,19 @@ class WebFileService {
     /**
      * Write file content
      */
-    async writeFile(filename: string, content: string): Promise<void> {
+    async writeFile(filename: string, content: string, subDir?: string): Promise<void> {
         if (!this.directoryHandle) throw new Error('No directory selected');
 
         try {
-            // Verify write permission
-            await this.verifyPermission(this.directoryHandle, true);
+            const dirHandle = subDir ? await this.getSubDirHandle(subDir, true) : this.directoryHandle;
+            if (!dirHandle) throw new Error(`Could not access directory ${subDir}`);
 
-            const fileHandle = await this.directoryHandle.getFileHandle(filename, { create: true });
+            const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
             const writable = await fileHandle.createWritable();
             await writable.write(content);
             await writable.close();
         } catch (error) {
-            console.error(`Error writing ${filename}:`, error);
+            console.error(`Error writing ${filename} in ${subDir || 'root'}:`, error);
             throw error;
         }
     }
@@ -140,15 +167,16 @@ class WebFileService {
     /**
      * Delete file
      */
-    async deleteFile(filename: string): Promise<void> {
+    async deleteFile(filename: string, subDir?: string): Promise<void> {
         if (!this.directoryHandle) throw new Error('No directory selected');
 
         try {
-            // Verify write permission
-            await this.verifyPermission(this.directoryHandle, true);
-            await this.directoryHandle.removeEntry(filename);
+            const dirHandle = subDir ? await this.getSubDirHandle(subDir) : this.directoryHandle;
+            if (!dirHandle) return; // Already gone or non-existent dir
+
+            await dirHandle.removeEntry(filename);
         } catch (error) {
-            console.error(`Error deleting ${filename}:`, error);
+            console.error(`Error deleting ${filename} in ${subDir || 'root'}:`, error);
             throw error;
         }
     }

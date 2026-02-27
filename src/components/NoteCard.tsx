@@ -37,6 +37,7 @@ interface NoteCardProps {
     onUpdate: (content: string) => void;
     onDismissKeyboard?: () => void;
     onSync?: () => void;
+    onArchive?: () => void;
     onEditStart?: (instance: SmartEditorRef | null, content: string, selection: { start: number; end: number }) => void;
     onEditEnd?: () => void;
     onEditContentChange?: (content: string) => void;
@@ -72,7 +73,7 @@ const stripMarkdown = (text: string): string => {
         .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
 };
 
-export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onDismissKeyboard, onSync, onEditStart, onEditEnd, onEditContentChange, onEditSelectionChange, onStatusChange, externalEditContent, externalIsPinned, maxEditHeight, editorHorizontalInset = 64, autoEdit, forceExitEdit, onEditRequest, onQuickAddRequest, onEditorReady, style }) => {
+export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onDismissKeyboard, onSync, onArchive, onEditStart, onEditEnd, onEditContentChange, onEditSelectionChange, onStatusChange, externalEditContent, externalIsPinned, maxEditHeight, editorHorizontalInset = 64, autoEdit, forceExitEdit, onEditRequest, onQuickAddRequest, onEditorReady, style }) => {
     // Parse content upfront for autoEdit mode
     const initialParsed = autoEdit ? FrontmatterService.parseFrontmatter(note.content) : null;
 
@@ -446,6 +447,26 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
                     <Text style={styles.timestamp}>
                         {formatTimestamp(note.updatedAt)}
                     </Text>
+
+                    {/* Web-only controls: Archive and Edit */}
+                    {Platform.OS === 'web' && !isEditing && (
+                        <View style={styles.webControls}>
+                            <TouchableOpacity
+                                onPress={onArchive}
+                                style={styles.webControlBtn}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            >
+                                <Ionicons name="archive-outline" size={20} color="#000000" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={onEditRequest || handleLongPress}
+                                style={styles.webControlBtn}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            >
+                                <Ionicons name="create-outline" size={20} color="#000000" />
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </View>
 
 
@@ -639,6 +660,15 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: '#888888',
         ...RTL_TEXT_STYLE,
+    },
+    webControls: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginLeft: 12,
+    },
+    webControlBtn: {
+        marginLeft: 12,
+        padding: 4,
     },
     syncIndicator: {
         width: 8,

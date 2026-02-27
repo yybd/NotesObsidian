@@ -1,7 +1,7 @@
 // SearchBar.tsx - Search input with real-time filtering
 
 import React, { useState, forwardRef } from 'react';
-import { View, TextInput, TouchableOpacity, StyleSheet, Keyboard } from 'react-native';
+import { View, TextInput, TouchableOpacity, StyleSheet, Keyboard, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { RTL_TEXT_STYLE } from '../utils/rtlUtils';
 
@@ -74,6 +74,8 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#1A1A1A',
         ...RTL_TEXT_STYLE,
+        // @ts-ignore - outlineStyle is web-only
+        outlineStyle: Platform.OS === 'web' ? 'none' : undefined,
     },
     clearButton: {
         padding: 4,

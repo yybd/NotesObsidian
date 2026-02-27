@@ -20,6 +20,8 @@ interface HeaderProps {
     // Visibility
     hideSearchAndDomain?: boolean;
     onLayout?: (y: number, height: number) => void;
+    showReconnect?: boolean;
+    onReconnect?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -33,6 +35,8 @@ export const Header: React.FC<HeaderProps> = ({
     onFilterByDomain,
     hideSearchAndDomain,
     onLayout,
+    showReconnect,
+    onReconnect,
 }) => {
     return (
         <View onLayout={onLayout ? (e) => onLayout(e.nativeEvent.layout.y, e.nativeEvent.layout.height) : undefined}>
@@ -41,7 +45,15 @@ export const Header: React.FC<HeaderProps> = ({
                 <TouchableOpacity onPress={onSettingsPress} style={styles.iconButton}>
                     <Ionicons name="settings-outline" size={24} color="#1A1A1A" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>{title}</Text>
+                <View style={styles.headerCenter}>
+                    <Text style={styles.headerTitle}>{title}</Text>
+                    {showReconnect && (
+                        <TouchableOpacity onPress={onReconnect} style={styles.reconnectBadge}>
+                            <Ionicons name="refresh-circle-outline" size={16} color="#FFFFFF" />
+                            <Text style={styles.reconnectText}>חבר מחדש</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
                 <View style={styles.iconPlaceholder} />
             </View>
 
@@ -96,5 +108,24 @@ const styles = StyleSheet.create({
         paddingBottom: 8,
         backgroundColor: '#F0F2F5',
         zIndex: 10,
+    },
+    headerCenter: {
+        flexDirection: 'column',
+        alignItems: 'center',
+    },
+    reconnectBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FF9800',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 12,
+        marginTop: 4,
+    },
+    reconnectText: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontWeight: '600',
+        marginLeft: 4,
     },
 });

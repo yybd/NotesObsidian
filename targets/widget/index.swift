@@ -24,27 +24,55 @@ struct SimpleEntry: TimelineEntry {
 
 struct WidgetEntryView : View {
     var entry: Provider.Entry
+    @Environment(\.widgetFamily) var family
 
     var body: some View {
         // Deep link into the app to add a new note
         let addUrl = URL(string: "obsidiannotes://add")!
         
-        VStack {
-            Image(systemName: "square.and.pencil")
-                .font(.system(size: 32, weight: .semibold))
-                .foregroundColor(Color(red: 98/255, green: 0, blue: 238/255)) // #6200EE approx
-                .padding(.bottom, 2)
-            
-            Text("New Note")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.primary)
+        Group {
+            switch family {
+            case .accessoryCircular:
+                Image(systemName: "square.and.pencil")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .padding(8)
+                
+            case .accessoryRectangular:
+                HStack(spacing: 8) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 20))
+                    Text("New Note")
+                        .font(.headline)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
+            case .accessoryInline:
+                Text("\(Image(systemName: "square.and.pencil")) New Note")
+                
+            default:
+                // .systemSmall (Home Screen)
+                VStack {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 32, weight: .semibold))
+                        .foregroundColor(Color(red: 98/255, green: 0, blue: 238/255)) // #6200EE approx
+                        .padding(.bottom, 2)
+                    
+                    Text("New Note")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.primary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Full-tap area for small widgets
         .widgetURL(addUrl)
-        // iOS 17+ requires containerBackground API instead of coloring a ZStack
+        // iOS 17+ requires containerBackground API
         .containerBackground(for: .widget) {
-            Color(red: 240/255, green: 242/255, blue: 245/255) // #F0F2F5 approx
+            if family == .systemSmall {
+                Color(red: 240/255, green: 242/255, blue: 245/255) // #F0F2F5 approx
+            } else {
+                Color.clear
+            }
         }
     }
 }
@@ -59,6 +87,6 @@ struct NotesWidget: Widget {
         }
         .configurationDisplayName("Quick Add")
         .description("Add a new note quickly.")
-        .supportedFamilies([.systemSmall])
+        .supportedFamilies([.systemSmall, .accessoryCircular, .accessoryRectangular, .accessoryInline])
     }
 }

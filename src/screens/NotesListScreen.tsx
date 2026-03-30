@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
+import * as Linking from 'expo-linking';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNotesStore } from '../stores/notesStore';
 import { NoteCard } from '../components/NoteCard';
@@ -72,6 +73,50 @@ export const NotesListScreen = ({ navigation }: any) => {
     useEffect(() => {
         loadNotes();
     }, []);
+
+    const [shouldOpenQuickAdd, setShouldOpenQuickAdd] = useState(false);
+
+    // Handle deep links (e.g., from iOS Widget)
+    useEffect(() => {
+        const handleUrl = (url: string | null) => {
+            if (url && url.includes('obsidiannotes://add')) {
+                setShouldOpenQuickAdd(true);
+            }
+        };
+
+        // Handle URL that opened the app
+        Linking.getInitialURL().then((url) => {
+            if (url) handleUrl(url);
+        });
+
+        // Listen for URLs when app is in background/foreground
+        const linkingSubscription = Linking.addEventListener('url', ({ url }) => {
+            if (url) handleUrl(url);
+        });
+
+        return () => {
+            linkingSubscription.remove();
+        };
+    }, []);
+
+    // Try opening the modal reliably when state is set
+    useEffect(() => {
+        if (!shouldOpenQuickAdd) return;
+
+        let retryCount = 0;
+        const openWhenReady = () => {
+            if (quickAddInputRef.current) {
+                quickAddInputRef.current.openModal();
+                setShouldOpenQuickAdd(false); // reset
+            } else if (retryCount < 10) {
+                retryCount++;
+                setTimeout(openWhenReady, 100);
+            } else {
+                setShouldOpenQuickAdd(false); // give up after 1s
+            }
+        };
+        openWhenReady();
+    }, [shouldOpenQuickAdd]);
 
     // Handle AppState changes (Auto-refresh on foreground)
     useEffect(() => {

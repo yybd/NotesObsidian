@@ -28,6 +28,7 @@ export interface QuickAddInputRef {
     clear: () => void;
     setTextAndSelection: (text: string, sel: { start: number; end: number }) => void;
     blur: () => void;
+    openModal: () => void;
 }
 
 export const QuickAddInput = forwardRef<QuickAddInputRef, QuickAddInputProps>(({
@@ -52,6 +53,9 @@ export const QuickAddInput = forwardRef<QuickAddInputRef, QuickAddInputProps>(({
         blur: () => {
             editorModalRef.current?.blur();
             setModalVisible(false);
+        },
+        openModal: () => {
+            handleOpenModal();
         },
     }), []);
 

@@ -62,6 +62,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "@bacons/apple-targets",
       "expo-document-picker",
       "react-native-cloud-storage",
       "expo-localization"

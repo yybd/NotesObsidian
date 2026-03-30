@@ -14403,15 +14403,18 @@ new file mode 100644
 index 0000000..12b5a57
 Binary files /dev/null and b/node_modules/@expensify/react-native-live-markdown/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin differ
 diff --git a/node_modules/@expensify/react-native-live-markdown/apple/MarkdownTextInputDecoratorShadowNode.mm b/node_modules/@expensify/react-native-live-markdown/apple/MarkdownTextInputDecoratorShadowNode.mm
-index 8dae759..a42c883 100644
+index 8dae759..8152644 100644
 --- a/node_modules/@expensify/react-native-live-markdown/apple/MarkdownTextInputDecoratorShadowNode.mm
 +++ b/node_modules/@expensify/react-native-live-markdown/apple/MarkdownTextInputDecoratorShadowNode.mm
-@@ -306,5 +306,8 @@
+@@ -306,5 +306,11 @@
        *static_cast<ShadowNode *>(YGNodeGetContext(yogaNode)));
  }
  
 +// Polyfill missing Sealable move constructor for RN 0.77+ where the symbol is missing at link time
++#ifdef REACT_NATIVE_DEBUG
 +Sealable::Sealable(Sealable&& other) noexcept {}
++#endif
++
 +
  } // namespace react
  } // namespace facebook

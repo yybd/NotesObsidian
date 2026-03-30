@@ -171,7 +171,7 @@ export const NotesListScreen = ({ navigation }: any) => {
         };
     }, [loadNotes]);
 
-    // Handle keyboard dismiss (hide bottom section if needed)
+    // Handle keyboard dismiss (hide bottom section and discard draft)
     useEffect(() => {
         const hideListener = Keyboard.addListener(
             Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
@@ -180,14 +180,21 @@ export const NotesListScreen = ({ navigation }: any) => {
 
                 if (isSending) return;
                 if (editModalVisible) return;
-                // Draft discarding removed - saves in background instead!
+
+                if (quickNoteText) {
+                    quickAddInputRef.current?.clear();
+                    setQuickNoteText('');
+                    setQuickNotePinned(false);
+                    setQuickNoteDomain(null);
+                    AsyncStorage.removeItem('quickNoteDraft').catch(() => {});
+                }
             }
         );
 
         return () => {
             hideListener.remove();
         };
-    }, [isSending, editModalVisible]);
+    }, [isSending, editModalVisible, quickNoteText]);
 
     // Handle text change with list/checkbox continuation
     const handleTextChangeWithListContinuation = useCallback((

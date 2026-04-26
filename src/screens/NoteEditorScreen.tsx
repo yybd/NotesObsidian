@@ -141,6 +141,15 @@ export const NoteEditorScreen = ({ navigation, route }: any) => {
         });
     }, []);
 
+    // Prevent background sync from clobbering the note currently being edited.
+    useEffect(() => {
+        if (!existingNoteFromRoute) return;
+        const id = existingNoteFromRoute.id;
+        const { lockNote, unlockNote } = useNotesStore.getState();
+        lockNote(id);
+        return () => unlockNote(id);
+    }, [existingNoteFromRoute]);
+
     const handleBack = async () => {
         // Get final content and save
         try {

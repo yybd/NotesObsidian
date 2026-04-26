@@ -9,7 +9,11 @@ export interface DataSlice {
     notes: Note[];
     filteredNotes: Note[];
     isVaultPermissionGranted: boolean;
+    lockedNoteIds: Set<string>;
     loadNotes: () => Promise<void>;
+    syncFromExternal: () => Promise<void>;
+    lockNote: (id: string) => void;
+    unlockNote: (id: string) => void;
     createNote: (title: string, content: string) => Promise<Note>;
     updateNote: (id: string, filePath: string, content: string, skipSort?: boolean) => Promise<Note>;
     deleteNote: (filePath: string) => Promise<void>;
@@ -27,6 +31,76 @@ export const createDataSlice: StateCreator<
     notes: [],
     filteredNotes: [],
     isVaultPermissionGranted: true, // Default to true, update in loadNotes
+    lockedNoteIds: new Set<string>(),
+
+    lockNote: (id: string) => {
+        const next = new Set(get().lockedNoteIds);
+        next.add(id);
+        set({ lockedNoteIds: next });
+    },
+
+    unlockNote: (id: string) => {
+        const next = new Set(get().lockedNoteIds);
+        next.delete(id);
+        set({ lockedNoteIds: next });
+    },
+
+    syncFromExternal: async () => {
+        try {
+            const state = get();
+            const currentNotes = state.notes;
+            const lockedIds = state.lockedNoteIds;
+
+            const fresh = await StorageService.listNotes(currentNotes);
+
+            const currentMap = new Map(currentNotes.map((n) => [n.id, n]));
+            const freshMap = new Map(fresh.map((n) => [n.id, n]));
+
+            // Detect any change to avoid unnecessary re-renders
+            let hasChanges = currentMap.size !== freshMap.size;
+            if (!hasChanges) {
+                for (const [id, freshNote] of freshMap) {
+                    const curr = currentMap.get(id);
+                    if (!curr) { hasChanges = true; break; }
+                    if (curr.updatedAt.getTime() !== freshNote.updatedAt.getTime()) { hasChanges = true; break; }
+                    if (curr.content !== freshNote.content) { hasChanges = true; break; }
+                }
+            }
+
+            if (!hasChanges) return;
+
+            // Preserve locked notes (currently being edited) from current state
+            const merged = fresh.map((n) => {
+                if (lockedIds.has(n.id)) {
+                    const curr = currentMap.get(n.id);
+                    if (curr) return curr;
+                }
+                return n;
+            });
+
+            const sorted = merged.sort((a, b) => {
+                if (a.pinned && !b.pinned) return -1;
+                if (!a.pinned && b.pinned) return 1;
+                return b.updatedAt.getTime() - a.updatedAt.getTime();
+            });
+
+            SearchService.initialize(sorted);
+
+            const { searchQuery, selectedTag, currentDomain } = state;
+            let filtered: Note[] = sorted;
+            if (searchQuery) {
+                filtered = SearchService.search(searchQuery).map((r) => r.note);
+            } else if (selectedTag) {
+                filtered = SearchService.filterByTag(sorted, selectedTag);
+            } else if (currentDomain) {
+                filtered = sorted.filter((n) => n.domain === currentDomain);
+            }
+
+            set({ notes: sorted, filteredNotes: filtered });
+        } catch (error) {
+            console.warn('Background sync (syncFromExternal) failed:', error);
+        }
+    },
 
     loadNotes: async () => {
         set({ isLoading: true, error: null });

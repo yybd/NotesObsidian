@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Note, DOMAINS, DomainType } from '../types/Note';
+import { useNotesStore } from '../stores/notesStore';
 import FrontmatterService, { getContentWithoutFrontmatter, updateFrontmatter, removeFrontmatterKey } from '../services/FrontmatterService';
 import { DomainSelector } from './DomainSelector';
 import { UnifiedMarkdownDisplay } from './UnifiedMarkdownDisplay';
@@ -116,6 +117,17 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEditing]);
+
+    // Prevent background sync from clobbering this note while it is being edited inline.
+    // Releases automatically when edit mode ends or the card unmounts.
+    useEffect(() => {
+        if (!isEditing) return;
+        const id = note.id;
+        const lockNote = useNotesStore.getState().lockNote;
+        const unlockNote = useNotesStore.getState().unlockNote;
+        lockNote(id);
+        return () => unlockNote(id);
+    }, [isEditing, note.id]);
 
 
 

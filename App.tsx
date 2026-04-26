@@ -8,6 +8,7 @@ import { NotesListScreen } from './src/screens/NotesListScreen';
 
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import PureNotesService from './src/services/PureNotesService';
+import BackgroundSyncService from './src/services/BackgroundSyncService';
 import { AppState, Platform } from 'react-native';
 
 const Stack = createNativeStackNavigator();
@@ -53,8 +54,12 @@ export default function App() {
       }
     });
 
+    // Background sync: poll the active storage provider for external changes
+    BackgroundSyncService.start();
+
     return () => {
       subscription.remove();
+      BackgroundSyncService.stop();
     };
   }, []);
 

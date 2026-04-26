@@ -44,6 +44,8 @@ export const NotesListScreen = ({ navigation }: any) => {
         settings,
         isVaultPermissionGranted,
         reconnectWebVault,
+        lockNote,
+        unlockNote,
     } = useNotesStore();
 
     const [quickNoteText, setQuickNoteText] = useState('');
@@ -323,6 +325,16 @@ export const NotesListScreen = ({ navigation }: any) => {
         editModalOtherFm.current = otherFm;
         setEditModalVisible(true);
     }, []);
+
+    // Prevent background sync from clobbering the note while the edit modal is open.
+    // Releases automatically on any close path (save, dismiss, unmount).
+    useEffect(() => {
+        if (editModalVisible && editModalNote) {
+            const id = editModalNote.id;
+            lockNote(id);
+            return () => unlockNote(id);
+        }
+    }, [editModalVisible, editModalNote, lockNote, unlockNote]);
 
     // ── Save edited note from modal ──────────────────────────────────────
     const handleEditModalSave = async () => {

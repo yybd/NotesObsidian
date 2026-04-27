@@ -395,6 +395,7 @@ export const NotesListScreen = ({ navigation }: any) => {
             <View style={{ marginBottom: 12 }}>
                 <Swipeable
                     renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, item)}
+                    containerStyle={{ overflow: 'visible' }}
                 >
                     <NoteCard
                         note={item}

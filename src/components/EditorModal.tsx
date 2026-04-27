@@ -263,6 +263,9 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         backgroundColor: '#FFFFFF',
         overflow: 'hidden',
+        // The "Border Trick"
+        borderWidth: 1,
+        borderColor: '#FFFFFF',
     },
     bottomBar: {
         flexDirection: 'row',

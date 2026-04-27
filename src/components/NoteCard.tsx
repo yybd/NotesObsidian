@@ -395,21 +395,22 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
     };
 
     return (
+        <View style={[
+            styles.cardShadow,
+            isExpanded && styles.cardExpandedShadow,
+            style
+        ]}>
         <TouchableOpacity
             style={[
-                styles.cardShadow,
-                isExpanded && styles.cardExpandedShadow,
-                style
+                styles.cardClip,
+                isEditing && styles.cardEditing
             ]}
             onPress={handlePress}
             onLongPress={handleLongPress}
             activeOpacity={0.9}
             delayLongPress={500}
         >
-            <View style={[
-                styles.cardInner,
-                isEditing && styles.cardEditing
-            ]}>
+            <View style={styles.cardInner}>
                 {/* Timestamp, sync status, Done button, and Pin indicator */}
                 <View style={styles.header}>
                     <View style={styles.headerLeft}>
@@ -616,29 +617,33 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
                 )}
             </View>
         </TouchableOpacity>
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
     cardShadow: {
         marginBottom: 12,
-        borderRadius: 16, // Ensure shadow follows the rounded shape
+        borderRadius: 16,
+        backgroundColor: '#FFFFFF', // Required for shadow/elevation on Android
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 0.08,
         shadowRadius: 8,
-        elevation: 3,
+        elevation: 4,
     },
     cardExpandedShadow: {
-        shadowOpacity: 0.15,
+        shadowOpacity: 0.12,
         shadowRadius: 12,
-        elevation: 5,
+        elevation: 6,
+    },
+    cardClip: {
+        // Pass-through layer for the TouchableOpacity — visual rounding/clipping
+        // lives on cardShadow above. Avoids stacking multiple rounded edges,
+        // which produces a thin gray anti-alias ring at the corners on iOS.
     },
     cardInner: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
         padding: 16,
-        overflow: 'hidden', // Essential: clips absolute children like gradientOverlay
     },
     cardEditing: {
         borderWidth: 2,
@@ -769,7 +774,9 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         height: 40,
-        backgroundColor: 'rgba(255,255,255,0.8)',
+        backgroundColor: 'rgba(255,255,255,0.85)',
+        borderBottomLeftRadius: 16,
+        borderBottomRightRadius: 16,
     },
     quickAddRow: {
         flexDirection: 'row',

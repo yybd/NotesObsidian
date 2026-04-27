@@ -226,7 +226,7 @@ export const NoteEditorScreen = ({ navigation, route }: any) => {
     // Render saving status indicator
     const renderSavingStatus = () => {
         if (savingStatus === 'saving') {
-            return <ActivityIndicator size="small" color="#6200EE" />;
+            return <ActivityIndicator size="small" color="#000000" />;
         } else if (savingStatus === 'error') {
             return <Ionicons name="alert-circle" size={20} color="#F44336" />;
         }
@@ -243,7 +243,7 @@ export const NoteEditorScreen = ({ navigation, route }: any) => {
             {/* Custom Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={handleBack} style={styles.headerButton}>
-                    <Ionicons name="arrow-back" size={24} color="#6200EE" />
+                    <Ionicons name="arrow-back" size={24} color="#000000" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{t('edit_note')}</Text>
 
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
         width: 56,
         height: 56,
         borderRadius: 28,
-        backgroundColor: '#6200EE',
+        backgroundColor: '#000000',
         alignItems: 'center',
         justifyContent: 'center',
         elevation: 6,

@@ -12,7 +12,7 @@ export const EmptyNotesList: React.FC<EmptyNotesListProps> = ({ isLoading }) => 
     if (isLoading) {
         return (
             <View style={styles.emptyContainer}>
-                <ActivityIndicator size="large" color="#6200EE" />
+                <ActivityIndicator size="large" color="#000000" />
             </View>
         );
     }

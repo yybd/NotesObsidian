@@ -103,6 +103,34 @@ const buildCSS = (bg: string) => `
         unicode-bidi: plaintext;
         text-align: start;
     }
+    .ProseMirror ul[data-type="taskList"] {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .ProseMirror ul[data-type="taskList"] li {
+        display: flex;
+        align-items: flex-start;
+        margin-bottom: 0px;
+    }
+    .ProseMirror ul[data-type="taskList"] li > label {
+        flex: 0 0 auto;
+        margin-right: 12px;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        padding-top: 4px;
+    }
+    .ProseMirror ul[data-type="taskList"] li > div {
+        flex: 1 1 auto;
+    }
+    .ProseMirror ul[data-type="taskList"] input[type="checkbox"] {
+        cursor: pointer;
+        width: 1.1em;
+        height: 1.1em;
+        accent-color: #000000;
+        margin: 0;
+    }
 
 `;
 

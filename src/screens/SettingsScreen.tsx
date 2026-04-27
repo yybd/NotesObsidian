@@ -118,7 +118,7 @@ export const SettingsScreen = ({ navigation }: any) => {
                 ) : (
                     <>
                         <View style={styles.storageCard}>
-                            <Ionicons name="cloud-outline" size={24} color="#6200EE" />
+                            <Ionicons name="cloud-outline" size={24} color="#000000" />
                             <View style={{ flex: 1, marginLeft: 12 }}>
                                 <Text style={styles.storageTitle}>{t('connected_external_storage')}</Text>
                                 <Text style={styles.storageDesc} numberOfLines={1}>
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
     },
     button: {
         flexDirection: 'row',
-        backgroundColor: '#6200EE',
+        backgroundColor: '#000000',
         padding: 14,
         borderRadius: 12,
         justifyContent: 'center',
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
         marginTop: 8,
     },
     buttonPrimary: {
-        backgroundColor: '#6200EE',
+        backgroundColor: '#000000',
     },
     storageCard: {
         flexDirection: 'row',

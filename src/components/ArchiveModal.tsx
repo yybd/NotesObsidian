@@ -167,7 +167,7 @@ export const ArchiveModal: React.FC<ArchiveModalProps> = ({ visible, onClose }) 
 
                     {isLoading ? (
                         <View style={styles.centerContainer}>
-                            <ActivityIndicator size="large" color="#6200EE" />
+                            <ActivityIndicator size="large" color="#000000" />
                         </View>
                     ) : archivedNotes.length === 0 ? (
                         <View style={styles.centerContainer}>

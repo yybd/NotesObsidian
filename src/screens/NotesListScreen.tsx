@@ -449,8 +449,8 @@ export const NotesListScreen = ({ navigation }: any) => {
                             await loadNotes();
                             setRefreshing(false);
                         }}
-                        colors={['#6200EE']}
-                        tintColor="#6200EE"
+                        colors={['#000000']}
+                        tintColor="#000000"
                     />
                 }
                 onScrollToIndexFailed={(info) => {

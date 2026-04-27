@@ -155,7 +155,7 @@ export const UnifiedMarkdownDisplay: React.FC<UnifiedMarkdownDisplayProps> = ({ 
                         <Ionicons
                             name={isChecked ? "checkbox" : "square-outline"}
                             size={20}
-                            color={isChecked ? "#6200EE" : "#757575"}
+                            color={isChecked ? "#000000" : "#757575"}
                         />
                     </TouchableOpacity>
                 );
@@ -256,7 +256,7 @@ const markdownStyles = StyleSheet.create({
     blockquote: {
         backgroundColor: '#F5F5F5',
         borderRightWidth: 4,
-        borderRightColor: '#6200EE',
+        borderRightColor: '#000000',
         paddingHorizontal: 12,
         paddingVertical: 8,
         marginVertical: 4,
@@ -276,7 +276,7 @@ const markdownStyles = StyleSheet.create({
         marginVertical: 4,
     },
     link: {
-        color: '#6200EE',
+        color: '#000000',
         textDecorationLine: 'underline',
     },
 });

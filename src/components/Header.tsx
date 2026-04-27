@@ -114,6 +114,11 @@ const styles = StyleSheet.create({
         paddingBottom: 8,
         backgroundColor: '#F0F2F5',
         zIndex: 10,
+        // Cap the readable width on wide screens (web / large tablets) so
+        // the search and domain filter don't stretch edge-to-edge.
+        width: '100%',
+        maxWidth: 720,
+        alignSelf: 'center',
     },
     headerCenter: {
         flexDirection: 'column',

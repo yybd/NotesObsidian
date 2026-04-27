@@ -129,11 +129,13 @@ const styles = StyleSheet.create({
         direction: 'ltr',
         alignItems: 'center',
         backgroundColor: '#F0F2F5',
-        borderTopWidth: 1,
-        borderTopColor: '#E0E0E0',
         paddingHorizontal: 16,
         paddingTop: 10,
         gap: 8,
+        // Cap readable width on wide screens (web/tablet).
+        width: '100%',
+        maxWidth: 720,
+        alignSelf: 'center',
     },
     fakeInput: {
         flex: 1,

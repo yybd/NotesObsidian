@@ -16,6 +16,7 @@ import Swipeable from 'react-native-gesture-handler/Swipeable';
 import * as Linking from 'expo-linking';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BlurView } from 'expo-blur';
 import { useNotesStore } from '../stores/notesStore';
 import { NoteCard } from '../components/NoteCard';
 import { updateFrontmatter, removeFrontmatterKey } from '../services/FrontmatterService';
@@ -25,7 +26,6 @@ import { RTL_TEXT_STYLE } from '../utils/rtlUtils';
 import { Header } from '../components/Header';
 import { QuickAddInput, QuickAddInputRef } from '../components/QuickAddInput';
 import { EditorModal, EditorModalRef } from '../components/EditorModal';
-import { EditorPrewarm } from '../components/EditorPrewarm';
 import { EmptyNotesList } from '../components/EmptyNotesList';
 import { Note, DomainType } from '../types/Note';
 import { useKeyboardHeight } from '../hooks/useKeyboardHeight';
@@ -449,7 +449,9 @@ export const NotesListScreen = ({ navigation }: any) => {
                 onReconnect={reconnectWebVault}
             />
 
-            {/* Notes List */}
+            {/* Notes List — wrapped so we can lay a top blur over its first
+                visible row. Notes scroll behind the blur for a soft fade. */}
+            <View style={styles.listWrapper}>
             <FlatList
                 ref={flatListRef}
                 style={{ flex: 1 }}
@@ -494,6 +496,13 @@ export const NotesListScreen = ({ navigation }: any) => {
                     }, 100);
                 }}
             />
+                <BlurView
+                    intensity={60}
+                    tint="light"
+                    style={styles.topBlur}
+                    pointerEvents="none"
+                />
+            </View>
 
             {/* Bottom Section - Quick Note Input */}
             {!isSearchFocused && (
@@ -506,6 +515,15 @@ export const NotesListScreen = ({ navigation }: any) => {
                             : { bottom: 0 }
                     ]}
                 >
+                    {/* Blur strip above the bar so notes fade as they scroll
+                        under it. Anchored to the bar's top edge so it always
+                        sits in the right spot regardless of safe area. */}
+                    <BlurView
+                        intensity={60}
+                        tint="light"
+                        style={styles.bottomBlur}
+                        pointerEvents="none"
+                    />
                     <QuickAddInput
                         ref={quickAddInputRef}
                         text={quickNoteText}
@@ -557,10 +575,6 @@ export const NotesListScreen = ({ navigation }: any) => {
                     <Text style={styles.toastText}>{t('select_domain_before_save')}</Text>
                 </View>
             )}
-
-            {/* Hidden Tiptap warm-up: removes the cold-start lag the first
-                time the user opens the editor in a fresh app session. */}
-            <EditorPrewarm />
         </View>
     );
 };
@@ -568,7 +582,10 @@ export const NotesListScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F9F9F9',
+        // Match the centered content's surround color so the "wings" on wide
+        // screens (web/tablet) blend with the search bar / quick-add bar /
+        // editor surround instead of showing a slightly different shade.
+        backgroundColor: '#F0F2F5',
     },
     bottomSection: {
         position: 'absolute',
@@ -576,9 +593,36 @@ const styles = StyleSheet.create({
         right: 0,
         zIndex: 100,
     },
+    listWrapper: {
+        flex: 1,
+    },
+    topBlur: {
+        // Soft fade at the top of the list — notes scroll behind this strip
+        // and dissolve into the surrounding gray for a clean, minimal look.
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 32,
+    },
+    bottomBlur: {
+        // Anchored to the top of bottomSection and extends upward, so it
+        // overlays the FlatList area just above the QuickAdd bar.
+        position: 'absolute',
+        top: -32,
+        left: 0,
+        right: 0,
+        height: 32,
+    },
     listContent: {
         padding: 20,
         paddingBottom: 120,
+        // Cap notes list width on wide screens so cards don't span the
+        // entire monitor on web/tablet — keeps them readable and aligned
+        // with the search bar / quick add bar above and below.
+        width: '100%',
+        maxWidth: 720,
+        alignSelf: 'center',
     },
     archiveAction: {
         backgroundColor: '#FF9800',

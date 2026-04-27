@@ -135,6 +135,40 @@ export const EditorModal = React.forwardRef<EditorModalRef, EditorModalProps>(({
         return () => clearTimeout(id);
     }, [visible]);
 
+    // Track Tiptap WebView readiness so we can mask the empty editor area
+    // with a spinner during the cold-start window. Reset on every close so
+    // the next open re-evaluates readiness for the freshly-mounted WebView.
+    const [editorReady, setEditorReady] = useState(false);
+    // Spinner visibility is gated separately: only flip it on if loading
+    // actually drags past LOADER_DELAY_MS. Warm opens still spin up a fresh
+    // WebView per open and typically finish in 200–300 ms; we want the
+    // spinner only on truly cold starts so warm users never see it flash.
+    // 400 ms covers most warm cases while still kicking in for cold starts.
+    const LOADER_DELAY_MS = 400;
+    const [showLoader, setShowLoader] = useState(false);
+    // Mirror editorReady in a ref so the deferred timer can read the LATEST
+    // value at fire time. Without this the timer's closure captures the
+    // value from when it was scheduled (false) and shows the spinner after
+    // the editor has already become ready and the cursor is visible.
+    const editorReadyRef = useRef(editorReady);
+    editorReadyRef.current = editorReady;
+    useEffect(() => {
+        if (!visible) {
+            setEditorReady(false);
+            setShowLoader(false);
+            return;
+        }
+        const id = setTimeout(() => {
+            if (!editorReadyRef.current) setShowLoader(true);
+        }, LOADER_DELAY_MS);
+        return () => clearTimeout(id);
+    }, [visible]);
+    // Hide the spinner the moment the editor reports ready — covers the
+    // case where the timer already fired and the spinner is on screen.
+    useEffect(() => {
+        if (editorReady) setShowLoader(false);
+    }, [editorReady]);
+
     React.useImperativeHandle(ref, () => ({
         clear: () => { editorRef.current?.setText?.(''); },
         setTextAndSelection: (t, sel) => { editorRef.current?.setTextAndSelection?.(t, sel); },
@@ -194,16 +228,6 @@ export const EditorModal = React.forwardRef<EditorModalRef, EditorModalProps>(({
                     <TouchableOpacity style={StyleSheet.absoluteFill} onPress={handleClose} activeOpacity={1} />
 
                     <View style={styles.modalSheet}>
-                        {/* Header row */}
-                        <View style={styles.modalHeader}>
-                            <DomainSelector
-                                selectedDomain={domain}
-                                onSelectDomain={onDomainChange}
-                                mode="select"
-                                compact={compactDomain}
-                            />
-                        </View>
-
                         {/* Optional title input */}
                         {showTitle && (
                             <View style={styles.titleContainer}>
@@ -224,12 +248,33 @@ export const EditorModal = React.forwardRef<EditorModalRef, EditorModalProps>(({
                                     ref={handleEditorRef}
                                     initialContent={text}
                                     onChange={onTextChange}
+                                    onEditorReady={() => setEditorReady(true)}
                                     placeholder=""
                                     autoFocus={true}
                                     backgroundColor="#FFFFFF"
                                     style={{ flex: 1 }}
                                 />
                             )}
+                            {/* Loader masks the empty WebView during cold start.
+                                Only renders if loading takes >150ms — warm
+                                opens never see it (avoids a spinner→editor
+                                flash that perceived as added latency). */}
+                            {showLoader && (
+                                <View style={styles.editorLoader} pointerEvents="none">
+                                    <ActivityIndicator size="large" color="#000000" />
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Domain selector — placed below the editor so the
+                            user picks a domain right before sending. */}
+                        <View style={styles.domainSelectorRow}>
+                            <DomainSelector
+                                selectedDomain={domain}
+                                onSelectDomain={onDomainChange}
+                                mode="select"
+                                compact={compactDomain}
+                            />
                         </View>
 
                         {/* Toolbar + Save */}
@@ -274,21 +319,28 @@ EditorModal.displayName = 'EditorModal';
 const styles = StyleSheet.create({
     modalOverlay: {
         flex: 1,
-        backgroundColor: '#FFFFFF',
+        // Same gray as the centered modalSheet's background so the wings on
+        // wide screens are uniform with the writing surface surround.
+        backgroundColor: '#F0F2F5',
     },
     modalSheet: {
         flex: 1,
         backgroundColor: '#F0F2F5',
+        // Cap the writing surface on wide screens so the editor stays
+        // readable instead of stretching to ~1500 px on web.
+        width: '100%',
+        maxWidth: 720,
+        alignSelf: 'center',
     },
-    modalHeader: {
+    domainSelectorRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#FFFFFF',
+        // Match the editor window's gray surround (modalSheet background) so
+        // the row blends seamlessly with the area surrounding the editor.
+        backgroundColor: '#F0F2F5',
         paddingHorizontal: 16,
         paddingVertical: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F0F0F0',
     },
     titleContainer: {
         backgroundColor: '#FFFFFF',
@@ -312,6 +364,19 @@ const styles = StyleSheet.create({
         // The "Border Trick"
         borderWidth: 1,
         borderColor: '#FFFFFF',
+    },
+    editorLoader: {
+        // Sits on top of the (still-empty) editor area while the WebView and
+        // Tiptap finish their cold init. backgroundColor matches editorArea so
+        // the user sees a clean white surface with a spinner, not a flicker.
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: '#FFFFFF',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     bottomBar: {
         flexDirection: 'row',

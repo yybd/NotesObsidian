@@ -16,6 +16,7 @@ const Stack = createNativeStackNavigator();
 
 import { useNotesStore } from './src/stores/notesStore';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { EditorPrewarm } from './src/components/EditorPrewarm';
 
 export default function App() {
   const loadNotes = useNotesStore(state => state.loadNotes);
@@ -90,6 +91,11 @@ export default function App() {
           />
         </Stack.Navigator>
       </NavigationContainer>
+      {/* Tiptap WebView warm-up at app root: starts the WebView module + JS
+          load in parallel with NotesListScreen's initial fetch, giving the
+          editor more head-start before the user can tap "new note". Survives
+          navigation between screens too (vs. mounting in NotesListScreen). */}
+      <EditorPrewarm />
     </GestureHandlerRootView>
   );
 }

@@ -1,14 +1,12 @@
 // Note.ts - TypeScript interfaces for the app
 
 // Domain Types - Cognitive Contexts
-export type DomainType = 'action' | 'knowledge' | 'insight' | 'experience' | 'person';
+export type DomainType = 'action' | 'knowledge' | 'library';
 
 export const DOMAINS: Record<DomainType, { label: string; color: string; icon: string }> = {
   action: { label: 'לעשות', color: '#E53935', icon: 'checkbox-outline' }, // Red
   knowledge: { label: 'לדעת', color: '#1E88E5', icon: 'book-outline' }, // Blue
-  insight: { label: 'תובנה', color: '#8E24AA', icon: 'bulb-outline' }, // Purple
-  experience: { label: 'חוויה', color: '#43A047', icon: 'heart-outline' }, // Green
-  person: { label: 'אדם', color: '#FB8C00', icon: 'person-outline' }, // Orange
+  library: { label: 'לספרייה', color: '#8E24AA', icon: 'library-outline' }, // Purple
 };
 
 export interface Note {

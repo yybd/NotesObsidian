@@ -84,7 +84,12 @@ class StorageService {
                     const content = await provider.read(file.name);
                     const title = file.name.replace('.md', '');
                     const pinned = getFrontmatterProperty<boolean>(content, 'pinned') || false;
-                    const domain = getFrontmatterProperty<DomainType>(content, 'domain');
+                    let domain = getFrontmatterProperty<DomainType>(content, 'domain');
+                    
+                    // Migration: insight -> library
+                    if (domain as string === 'insight') {
+                        domain = 'library';
+                    }
 
                     notes.push({
                         id: file.name, // Use filename as ID to be consistent across providers
@@ -150,7 +155,12 @@ class StorageService {
                     const content = await provider.read(file.name, 'archive');
                     const title = file.name.replace('.md', '');
                     const pinned = getFrontmatterProperty<boolean>(content, 'pinned') || false;
-                    const domain = getFrontmatterProperty<DomainType>(content, 'domain');
+                    let domain = getFrontmatterProperty<DomainType>(content, 'domain');
+                    
+                    // Migration: insight -> library
+                    if (domain as string === 'insight') {
+                        domain = 'library';
+                    }
 
                     notes.push({
                         id: file.name,

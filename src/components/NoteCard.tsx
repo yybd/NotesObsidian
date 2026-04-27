@@ -397,9 +397,8 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
     return (
         <TouchableOpacity
             style={[
-                styles.card,
-                isExpanded && styles.cardExpanded,
-                isEditing && styles.cardEditing,
+                styles.cardShadow,
+                isExpanded && styles.cardExpandedShadow,
                 style
             ]}
             onPress={handlePress}
@@ -407,234 +406,244 @@ export const NoteCard: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onD
             activeOpacity={0.9}
             delayLongPress={500}
         >
-            {/* Timestamp, sync status, Done button, and Pin indicator */}
-            <View style={styles.header}>
-                <View style={styles.headerLeft}>
-                    {/* Domain Chip - Clickable in Edit Mode */}
-                    {(isEditing || note.domain) && (
-                        <TouchableOpacity
-                            onPress={() => isEditing && setShowDomainSelector(!showDomainSelector)}
-                            disabled={!isEditing}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                            style={[
-                                styles.domainChip,
-                                note.domain && DOMAINS[note.domain] ? {
-                                    backgroundColor: DOMAINS[note.domain].color + '20',
-                                    borderColor: DOMAINS[note.domain].color
-                                } : (isEditing ? styles.domainEditButton : {})
-                            ]}
-                        >
-                            <Text style={[
-                                styles.domainText,
-                                note.domain && DOMAINS[note.domain] ? { color: DOMAINS[note.domain].color } : styles.domainEditPlaceholder
-                            ]}>
-                                {note.domain ? t(`domain_${note.domain}`) : t('add_domain')}
-                            </Text>
-                        </TouchableOpacity>
-                    )}
-                    {/* Pin Icon - Toggle in Edit Mode */}
-                    {(isEditing || isPinned) && (
-                        <TouchableOpacity
-                            onPress={() => {
-                                if (isEditing) {
-                                    const newPinned = !isPinned;
-                                    setIsPinned(newPinned);
-
-                                    const newFrontmatter = { ...editFrontmatter, pinned: newPinned };
-                                    setEditFrontmatter(newFrontmatter);
-
-                                    const fullContent = FrontmatterService.composeContent(newFrontmatter, editBody);
-
-                                    // Force immediate save for metadata changes
-                                    onUpdate(fullContent);
-                                }
-                            }}
-                            disabled={!isEditing}
-                        >
-                            <MaterialCommunityIcons
-                                name={isPinned ? "pin" : "pin-outline"}
-                                size={20}
-                                color={isPinned ? "#000000" : (isEditing ? "#000000" : "transparent")}
-                                style={styles.pinIcon}
-                            />
-                        </TouchableOpacity>
-                    )}
-                    <Text style={styles.timestamp}>
-                        {formatTimestamp(note.updatedAt)}
-                    </Text>
-
-                    {/* Web-only controls: Archive and Edit */}
-                    {Platform.OS === 'web' && !isEditing && (
-                        <View style={styles.webControls}>
+            <View style={[
+                styles.cardInner,
+                isEditing && styles.cardEditing
+            ]}>
+                {/* Timestamp, sync status, Done button, and Pin indicator */}
+                <View style={styles.header}>
+                    <View style={styles.headerLeft}>
+                        {/* Domain Chip - Clickable in Edit Mode */}
+                        {(isEditing || note.domain) && (
                             <TouchableOpacity
-                                onPress={onArchive}
-                                style={styles.webControlBtn}
+                                onPress={() => isEditing && setShowDomainSelector(!showDomainSelector)}
+                                disabled={!isEditing}
                                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                style={[
+                                    styles.domainChip,
+                                    note.domain && DOMAINS[note.domain] ? {
+                                        backgroundColor: DOMAINS[note.domain].color + '20',
+                                        borderColor: DOMAINS[note.domain].color
+                                    } : (isEditing ? styles.domainEditButton : {})
+                                ]}
                             >
-                                <Ionicons name="archive-outline" size={20} color="#000000" />
+                                <Text style={[
+                                    styles.domainText,
+                                    note.domain && DOMAINS[note.domain] ? { color: DOMAINS[note.domain].color } : styles.domainEditPlaceholder
+                                ]}>
+                                    {note.domain ? t(`domain_${note.domain}`) : t('add_domain')}
+                                </Text>
                             </TouchableOpacity>
+                        )}
+                        {/* Pin Icon - Toggle in Edit Mode */}
+                        {(isEditing || isPinned) && (
                             <TouchableOpacity
-                                onPress={onEditRequest || handleLongPress}
-                                style={styles.webControlBtn}
-                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                onPress={() => {
+                                    if (isEditing) {
+                                        const newPinned = !isPinned;
+                                        setIsPinned(newPinned);
+    
+                                        const newFrontmatter = { ...editFrontmatter, pinned: newPinned };
+                                        setEditFrontmatter(newFrontmatter);
+    
+                                        const fullContent = FrontmatterService.composeContent(newFrontmatter, editBody);
+    
+                                        // Force immediate save for metadata changes
+                                        onUpdate(fullContent);
+                                    }
+                                }}
+                                disabled={!isEditing}
                             >
-                                <Ionicons name="create-outline" size={20} color="#000000" />
+                                <MaterialCommunityIcons
+                                    name={isPinned ? "pin" : "pin-outline"}
+                                    size={20}
+                                    color={isPinned ? "#000000" : (isEditing ? "#000000" : "transparent")}
+                                    style={styles.pinIcon}
+                                />
                             </TouchableOpacity>
-                        </View>
-                    )}
-                </View>
-
-
-                <View style={styles.headerRight}>
-                    {isEditing && (
-                        <TouchableOpacity onPress={handleDone} style={styles.doneButton} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-                            <Ionicons name="checkmark-circle" size={32} color="#000000" />
-                        </TouchableOpacity>
-                    )}
-                </View>
-            </View>
-
-            {/* Domain Selector - Full width below header */}
-            {isEditing && showDomainSelector && (
-                <DomainSelector
-                    selectedDomain={note.domain as DomainType}
-                    onSelectDomain={(domain) => {
-                        const newFrontmatter = { ...editFrontmatter };
-                        if (domain) {
-                            newFrontmatter['domain'] = domain;
-                        } else {
-                            delete newFrontmatter['domain'];
-                        }
-                        setEditFrontmatter(newFrontmatter);
-                        setShowDomainSelector(false);
-
-                        const fullContent = FrontmatterService.composeContent(newFrontmatter, editBody);
-                        onUpdate(fullContent);
-                    }}
-                    mode="select"
-                    style={{ marginBottom: 12 }}
-                />
-            )}
-
-            {/* Content - view or edit mode */}
-            {isEditing ? (
-                <View
-                    style={maxEditHeight ? { maxHeight: maxEditHeight } : undefined}
-                    onLayout={() => {
-                        // Event-driven focus: fires when the editor container
-                        // is actually laid out — works regardless of device speed.
-                        if (pendingFocusRef.current) {
-                            pendingFocusRef.current = false;
-                            editorRef.current?.focus();
-                        }
-                    }}
-                >
-                    <SmartEditor
-                        ref={handleEditorRef}
-                        initialContent={editBody}
-                        selection={editSelection}
-                        onChange={handleTextChangeWithListContinuation}
-                        onSelectionChange={(e: any) => {
-                            const newSelection = e.nativeEvent.selection;
-                            setEditSelection(newSelection);
-                            onEditSelectionChange?.(newSelection);
-                        }}
-                        onStatusChange={onStatusChange}
-                        onEditorReady={onEditorReady}
-                        autoFocus={autoEdit}
-                        contentInset={{ bottom: 0 }}
-                        scrollIndicatorInsets={{ bottom: 0 }}
-                    />
-                </View>
-            ) : (
-                <View style={!isExpanded ? { maxHeight: 100, overflow: 'hidden' } : undefined}>
-                    {/* Title */}
-                    {hasTitle && title && (
-                        <Text style={[styles.title, { textAlign: getDirection(title) === 'rtl' ? 'right' : 'left' }]} numberOfLines={isExpanded ? undefined : 2}>
-                            {title}
+                        )}
+                        <Text style={styles.timestamp}>
+                            {formatTimestamp(note.updatedAt)}
                         </Text>
-                    )}
-                    {/* Body preview */}
-                    <View style={!isExpanded ? { maxHeight: 120, overflow: 'hidden' } : undefined}>
-                        <UnifiedMarkdownDisplay
-                            content={bodyContent}
-                            onToggleCheckbox={isExpanded && !isEditing ? (index) => {
-                                const newContent = toggleCheckboxByIndex(note.content, index);
-                                if (newContent !== note.content) {
-                                    onUpdate(newContent);
-                                }
-                            } : undefined}
+    
+                        {/* Web-only controls: Archive and Edit */}
+                        {Platform.OS === 'web' && !isEditing && (
+                            <View style={styles.webControls}>
+                                <TouchableOpacity
+                                    onPress={onArchive}
+                                    style={styles.webControlBtn}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                    <Ionicons name="archive-outline" size={20} color="#000000" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={onEditRequest || handleLongPress}
+                                    style={styles.webControlBtn}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                    <Ionicons name="create-outline" size={20} color="#000000" />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
+    
+    
+                    <View style={styles.headerRight}>
+                        {isEditing && (
+                            <TouchableOpacity onPress={handleDone} style={styles.doneButton} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+                                <Ionicons name="checkmark-circle" size={32} color="#000000" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </View>
+    
+                {/* Domain Selector - Full width below header */}
+                {isEditing && showDomainSelector && (
+                    <DomainSelector
+                        selectedDomain={note.domain as DomainType}
+                        onSelectDomain={(domain) => {
+                            const newFrontmatter = { ...editFrontmatter };
+                            if (domain) {
+                                newFrontmatter['domain'] = domain;
+                            } else {
+                                delete newFrontmatter['domain'];
+                            }
+                            setEditFrontmatter(newFrontmatter);
+                            setShowDomainSelector(false);
+    
+                            const fullContent = FrontmatterService.composeContent(newFrontmatter, editBody);
+                            onUpdate(fullContent);
+                        }}
+                        mode="select"
+                        style={{ marginBottom: 12 }}
+                    />
+                )}
+    
+                {/* Content - view or edit mode */}
+                {isEditing ? (
+                    <View
+                        style={maxEditHeight ? { maxHeight: maxEditHeight } : undefined}
+                        onLayout={() => {
+                            // Event-driven focus: fires when the editor container
+                            // is actually laid out — works regardless of device speed.
+                            if (pendingFocusRef.current) {
+                                pendingFocusRef.current = false;
+                                editorRef.current?.focus();
+                            }
+                        }}
+                    >
+                        <SmartEditor
+                            ref={handleEditorRef}
+                            initialContent={editBody}
+                            selection={editSelection}
+                            onChange={handleTextChangeWithListContinuation}
+                            onSelectionChange={(e: any) => {
+                                const newSelection = e.nativeEvent.selection;
+                                setEditSelection(newSelection);
+                                onEditSelectionChange?.(newSelection);
+                            }}
+                            onStatusChange={onStatusChange}
+                            onEditorReady={onEditorReady}
+                            autoFocus={autoEdit}
+                            contentInset={{ bottom: 0 }}
+                            scrollIndicatorInsets={{ bottom: 0 }}
                         />
                     </View>
-                    {!isExpanded && hasMore && (
-                        <View style={styles.gradientOverlay} />
-                    )}
-                </View>
-            )}
-
-            {/* Quick Add Checklist Item Button - Inline at the bottom of display mode */}
-            {isExpanded && !isEditing && hasChecklist && (
-                <View style={styles.quickAddRow}>
-                    <TouchableOpacity
-                        onPress={handleQuickAdd}
-                        style={styles.quickAddButtonInline}
-                    >
-                        <Ionicons name="add-circle" size={32} color="#000000" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        onPress={handleDeleteCompleted}
-                        style={[styles.quickAddButtonInline, { marginLeft: 24 }]}
-                    >
-                        <MaterialCommunityIcons name="broom" size={28} color="#000000" />
-                    </TouchableOpacity>
-                </View>
-            )}
-
-            {/* Tags */}
-            {note.tags && note.tags.length > 0 && !isEditing && (
-                <View style={styles.tagsContainer}>
-                    {note.tags.slice(0, 3).map((tag) => (
-                        <View key={tag} style={styles.tag}>
-                            <Text style={styles.tagText}>#{tag}</Text>
+                ) : (
+                    <View style={!isExpanded ? { maxHeight: 100, overflow: 'hidden' } : undefined}>
+                        {/* Title */}
+                        {hasTitle && title && (
+                            <Text style={[styles.title, { textAlign: getDirection(title) === 'rtl' ? 'right' : 'left' }]} numberOfLines={isExpanded ? undefined : 2}>
+                                {title}
+                            </Text>
+                        )}
+                        {/* Body preview */}
+                        <View style={!isExpanded ? { maxHeight: 120, overflow: 'hidden' } : undefined}>
+                            <UnifiedMarkdownDisplay
+                                content={bodyContent}
+                                onToggleCheckbox={isExpanded && !isEditing ? (index) => {
+                                    const newContent = toggleCheckboxByIndex(note.content, index);
+                                    if (newContent !== note.content) {
+                                        onUpdate(newContent);
+                                    }
+                                } : undefined}
+                            />
                         </View>
-                    ))}
-                    {note.tags.length > 3 && (
-                        <Text style={styles.moreText}>+{note.tags.length - 3}</Text>
-                    )}
-                </View>
-            )}
-
-            {/* Expand indicator */}
-            {!isExpanded && hasMore && !isEditing && (
-                <View style={styles.expandHint}>
-                    <Ionicons name="chevron-down" size={16} color="#999" />
-                </View>
-            )}
+                        {!isExpanded && hasMore && (
+                            <View style={styles.gradientOverlay} />
+                        )}
+                    </View>
+                )}
+    
+                {/* Quick Add Checklist Item Button - Inline at the bottom of display mode */}
+                {isExpanded && !isEditing && hasChecklist && (
+                    <View style={styles.quickAddRow}>
+                        <TouchableOpacity
+                            onPress={handleQuickAdd}
+                            style={styles.quickAddButtonInline}
+                        >
+                            <Ionicons name="add-circle" size={32} color="#000000" />
+                        </TouchableOpacity>
+    
+                        <TouchableOpacity
+                            onPress={handleDeleteCompleted}
+                            style={[styles.quickAddButtonInline, { marginLeft: 24 }]}
+                        >
+                            <MaterialCommunityIcons name="broom" size={28} color="#000000" />
+                        </TouchableOpacity>
+                    </View>
+                )}
+    
+                {/* Tags */}
+                {note.tags && note.tags.length > 0 && !isEditing && (
+                    <View style={styles.tagsContainer}>
+                        {note.tags.slice(0, 3).map((tag) => (
+                            <View key={tag} style={styles.tag}>
+                                <Text style={styles.tagText}>#{tag}</Text>
+                            </View>
+                        ))}
+                        {note.tags.length > 3 && (
+                            <Text style={styles.moreText}>+{note.tags.length - 3}</Text>
+                        )}
+                    </View>
+                )}
+    
+                {/* Expand indicator */}
+                {!isExpanded && hasMore && !isEditing && (
+                    <View style={styles.expandHint}>
+                        <Ionicons name="chevron-down" size={16} color="#999" />
+                    </View>
+                )}
+            </View>
         </TouchableOpacity>
     );
 };
 
 const styles = StyleSheet.create({
-    card: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        padding: 16,
+    cardShadow: {
         marginBottom: 12,
+        borderRadius: 16, // Ensure shadow follows the rounded shape
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 8,
         elevation: 3,
     },
-    cardExpanded: {
+    cardExpandedShadow: {
         shadowOpacity: 0.15,
         shadowRadius: 12,
         elevation: 5,
     },
+    cardInner: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 16,
+        overflow: 'hidden', // Essential: clips absolute children like gradientOverlay
+    },
     cardEditing: {
         borderWidth: 2,
         borderColor: '#000000',
+        borderRadius: 16,
     },
     header: {
         flexDirection: 'row',
@@ -652,7 +661,7 @@ const styles = StyleSheet.create({
     },
     domainChip: {
         paddingHorizontal: 8,
-        paddingVertical: 2,
+        paddingVertical: 6,
         borderRadius: 12,
         marginRight: 8,
         borderWidth: 1,
@@ -694,7 +703,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 8,
-        paddingVertical: 2,
+        paddingVertical: 6,
         borderRadius: 12,
         marginRight: 8,
         borderWidth: 1,
@@ -735,7 +744,7 @@ const styles = StyleSheet.create({
     tag: {
         backgroundColor: '#E3F2FD',
         paddingHorizontal: 8,
-        paddingVertical: 4,
+        paddingVertical: 6,
         borderRadius: 12,
         marginLeft: 6,
         marginBottom: 4,

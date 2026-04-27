@@ -1,7 +1,10 @@
 # Native build outputs — Vercel only needs the web bundle.
+# NOTE: modules/ is NOT excluded — package.json references local Expo modules
+# via `file:modules/local-file-bookmark`, so npm install needs the folder to
+# resolve those entries even though the iOS-specific JS gets stubbed on web
+# via .web.ts overrides (see e.g. CloudFileService.web.ts).
 ios/
 android/
-modules/
 *.xcworkspace/
 *.xcodeproj/
 

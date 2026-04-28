@@ -28,7 +28,8 @@ import { EmptyNotesList } from '../components/EmptyNotesList';
 import { Note, DomainType } from '../types/Note';
 import { useKeyboardHeight } from '../hooks/useKeyboardHeight';
 import {
-    SURROUND_COLOR,
+    LIST_BACKGROUND,
+    LIST_FADE_HEIGHT,
     SURROUND_RGB,
     CARD_GAP,
     CARD_SEPARATOR_WIDTH,
@@ -635,10 +636,11 @@ export const NotesListScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        // Match the centered content's surround color so the "wings" on wide
-        // screens (web/tablet) blend with the search bar / quick-add bar /
-        // editor surround instead of showing a slightly different shade.
-        backgroundColor: SURROUND_COLOR,
+        // Background of the scrolling list area. In default this matches
+        // the gray chrome so cards and surround share one shade; in
+        // minimal it switches to white so the white note cards bleed into
+        // the list and only the hairline dividers separate them.
+        backgroundColor: LIST_BACKGROUND,
     },
     bottomSection: {
         position: 'absolute',
@@ -656,16 +658,16 @@ const styles = StyleSheet.create({
         top: 0,
         left: 0,
         right: 0,
-        height: 12,
+        height: LIST_FADE_HEIGHT,
     },
     bottomBlur: {
         // Anchored to the top of bottomSection and extends upward, so it
         // overlays the FlatList area just above the QuickAdd bar.
         position: 'absolute',
-        top: -12,
+        top: -LIST_FADE_HEIGHT,
         left: 0,
         right: 0,
-        height: 12,
+        height: LIST_FADE_HEIGHT,
     },
     listContent: {
         padding: 20,

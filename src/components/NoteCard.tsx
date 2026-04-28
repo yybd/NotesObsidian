@@ -27,7 +27,12 @@ import { UnifiedMarkdownDisplay } from './UnifiedMarkdownDisplay';
 import { SmartEditor, SmartEditorRef } from './SmartEditor';
 import { getDirection, RTL_TEXT_STYLE } from '../utils/rtlUtils';
 import { handleListContinuation, toggleCheckboxByIndex, appendChecklistItem } from '../utils/markdownUtils';
-import { CARD_RADIUS, CARD_SHOW_SHADOW } from '../theme/listExperiment';
+import {
+    CARD_RADIUS,
+    CARD_SHOW_SHADOW,
+    DOMAIN_CHIP_USES_TINT,
+    DOMAIN_CHIP_FONT_WEIGHT,
+} from '../theme/listExperiment';
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -487,7 +492,9 @@ const NoteCardImpl: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onDism
                                 style={[
                                     styles.domainChip,
                                     note.domain && DOMAINS[note.domain] ? {
-                                        backgroundColor: DOMAINS[note.domain].color + '20',
+                                        backgroundColor: DOMAIN_CHIP_USES_TINT
+                                            ? DOMAINS[note.domain].color + '20'
+                                            : '#FFFFFF',
                                         borderColor: DOMAINS[note.domain].color
                                     } : (isEditing ? styles.domainEditButton : {})
                                 ]}
@@ -754,7 +761,7 @@ const styles = StyleSheet.create({
     },
     domainText: {
         fontSize: 12,
-        fontWeight: '600',
+        fontWeight: DOMAIN_CHIP_FONT_WEIGHT,
     },
     pinIcon: {
         marginRight: 4,

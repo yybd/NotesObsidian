@@ -36,6 +36,7 @@ import {
     SURROUND_COLOR,
     EDITOR_CARD_RADIUS,
     EDITOR_CARD_INSET,
+    EDITOR_TOP_OFFSET,
     EDITOR_BORDER_WIDTH,
     EDITOR_BORDER_COLOR,
 } from '../theme/listExperiment';
@@ -621,7 +622,7 @@ const styles = StyleSheet.create({
     titleContainer: {
         backgroundColor: '#FFFFFF',
         marginHorizontal: EDITOR_CARD_INSET,
-        marginTop: EDITOR_CARD_INSET,
+        marginTop: EDITOR_TOP_OFFSET,
         borderRadius: EDITOR_CARD_RADIUS,
         borderTopWidth: EDITOR_BORDER_WIDTH,
         borderTopColor: EDITOR_BORDER_COLOR,
@@ -652,9 +653,10 @@ const styles = StyleSheet.create({
     },
     // No-title flow (QuickAdd) — give the editor card more breathing room
     // above so it doesn't hug the top of the modal. In minimal mode the
-    // top hairline lives on the editor card itself since there's no title.
+    // top hairline lives on the editor card itself since there's no title,
+    // and the breathing gap above the line uses EDITOR_TOP_OFFSET.
     editorAreaNoTitle: {
-        marginTop: EDITOR_CARD_INSET === 0 ? 0 : 32,
+        marginTop: EDITOR_CARD_INSET === 0 ? EDITOR_TOP_OFFSET : 32,
         borderTopWidth: EDITOR_BORDER_WIDTH,
         borderTopColor: EDITOR_BORDER_COLOR,
     },

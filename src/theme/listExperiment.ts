@@ -2,12 +2,14 @@
 // modal. Flip STYLE_VARIANT and reload — every consumer reads from this
 // file, so the whole app rerenders against the new variant.
 //
-//   'default' — gray surround, white rounded cards with a soft shadow,
-//               12 px gaps between cards. The original look.
-//   'minimal' — white surround everywhere, no card radius, no shadow.
-//               A hairline black line separates list items, and the
-//               write/edit window is bracketed by a hairline black line
-//               at the top and bottom only.
+//   'default' — gray surround everywhere, white rounded cards with a
+//               soft shadow, 12 px gaps between cards. Original look.
+//   'minimal' — gray surround on the chrome (header / search / quick-add
+//               / editor surround) but the scrolling list itself is a
+//               white sheet with hairline black dividers between items.
+//               The write/edit window is a flush white sheet framed by
+//               hairline black lines at the top and bottom only, sitting
+//               with a small breathing gap of gray above it.
 //
 // The two variants share the same component tree — only token values
 // differ — so you can flip back and forth freely while playing with it.
@@ -18,30 +20,46 @@ export const STYLE_VARIANT: 'default' | 'minimal' = 'minimal';
 
 const isMinimal = STYLE_VARIANT === 'minimal';
 
-// Surround / board background. The list, editor modal, header search
-// area and quick-add bar all paint this color so the composition reads
-// as one continuous surface.
-export const SURROUND_COLOR = isMinimal ? '#FFFFFF' : '#F0F2F5';
-// Same color in `r, g, b` form — used by the scroll-fade strips that
-// build their gradient out of variable-alpha rgba layers.
-export const SURROUND_RGB = isMinimal ? '255, 255, 255' : '240, 242, 245';
+// Surround / chrome color. Header, search row, QuickAdd bar, and the
+// editor modal's wings all paint this — gray in both variants so the
+// app chrome reads consistently and the white list (in minimal) pops
+// against it.
+export const SURROUND_COLOR = '#F0F2F5';
+// Same in `r, g, b` form — used by the scroll-fade strips.
+export const SURROUND_RGB = '240, 242, 245';
 
-// ─── Notes list cards ─────────────────────────────────────────────────
+// Notes list area. In minimal mode the scrolling list sits on a white
+// sheet so the cards (also white) bleed into it and only the hairline
+// black dividers separate them.
+export const LIST_BACKGROUND = isMinimal ? '#FFFFFF' : '#F0F2F5';
+
+// Height of the soft fade strips at the top and bottom of the list.
+// Smaller in minimal so the hairline dividers stay visible right up to
+// the chrome edge instead of dissolving into a thick blur.
+export const LIST_FADE_HEIGHT = isMinimal ? 6 : 12;
+
+// Cards in the list.
 export const CARD_RADIUS = isMinimal ? 0 : 16;
 export const CARD_GAP = isMinimal ? 0 : 12;
 export const CARD_SHOW_SHADOW = !isMinimal;
 
-// In minimal mode, each card carries a hairline black line at its
-// bottom edge — that hairline is the divider between cards.
+// Domain chip on each note card.
+//   default — chip background is the domain color at ~12% opacity.
+//   minimal — chip background is plain white; only the colored border and
+//             text identify the domain.
+export const DOMAIN_CHIP_USES_TINT = !isMinimal;
+export const DOMAIN_CHIP_FONT_WEIGHT: '400' | '600' = isMinimal ? '400' : '600';
+// In minimal, every card carries a hairline black line at its bottom
+// edge — that hairline is the divider between cards.
 export const CARD_SEPARATOR_WIDTH = isMinimal ? StyleSheet.hairlineWidth : 0;
 export const CARD_SEPARATOR_COLOR = '#000000';
 
-// ─── Editor modal (write / edit window) ───────────────────────────────
-// In minimal mode the editor card spans the full modal width with no
-// rounded corners — it reads as a flush sheet inset only by hairline
-// lines at the very top and very bottom of the writing surface.
+// Editor modal — write / edit window.
 export const EDITOR_CARD_RADIUS = isMinimal ? 0 : 12;
 export const EDITOR_CARD_INSET = isMinimal ? 0 : 20;
-
+// Vertical breathing gap above the writing window so the top hairline
+// sits a little below the modal's top edge (gray of the surround shows
+// above it). Default keeps the original 20 px card inset on top.
+export const EDITOR_TOP_OFFSET = isMinimal ? 12 : 20;
 export const EDITOR_BORDER_WIDTH = isMinimal ? StyleSheet.hairlineWidth : 0;
 export const EDITOR_BORDER_COLOR = '#000000';

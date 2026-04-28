@@ -683,8 +683,14 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
         justifyContent: 'center',
         alignItems: 'center',
-        width: 80,
-        height: '100%',
+        width: 72,
+        // Inset the button from the card edges so it doesn't sit flush
+        // against the top/bottom of the note or against the screen edge
+        // when revealed by the swipe gesture.
+        marginVertical: 8,
+        marginHorizontal: 8,
+        alignSelf: 'center',
+        paddingVertical: 14,
         borderRadius: 16,
         borderWidth: 1,
         borderColor: '#000000',

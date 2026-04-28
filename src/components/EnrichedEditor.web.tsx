@@ -65,6 +65,7 @@ export interface EnrichedEditorProps {
     style?: StyleProp<ViewStyle>;
     autoFocus?: boolean;
     backgroundColor?: string;
+    scale?: number;
 }
 
 // ─── Stub component ─────────────────────────────────────────────────────────

@@ -87,6 +87,8 @@ export interface EnrichedEditorProps {
     style?: StyleProp<ViewStyle>;
     autoFocus?: boolean;
     backgroundColor?: string;
+    /** Multiplier applied to body font size and line height. 1 = default. */
+    scale?: number;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -104,6 +106,7 @@ export const EnrichedEditor = forwardRef<EnrichedEditorRef, EnrichedEditorProps>
             style,
             autoFocus = false,
             backgroundColor = '#FFFFFF',
+            scale = 1,
         },
         ref,
     ) => {
@@ -166,7 +169,14 @@ export const EnrichedEditor = forwardRef<EnrichedEditorRef, EnrichedEditorProps>
                     defaultValue={initialHtml}
                     placeholder={placeholder}
                     autoFocus={autoFocus}
-                    style={styles.input}
+                    style={
+                        scale === 1
+                            ? styles.input
+                            : StyleSheet.flatten([
+                                  styles.input,
+                                  { fontSize: 16 * scale, lineHeight: 24 * scale },
+                              ])
+                    }
                     htmlStyle={EDITOR_HTML_STYLE}
                     // The MD→HTML pipeline emits standard tags (<pre><code>,
                     // <input type="checkbox">). useHtmlNormalizer maps those

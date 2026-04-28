@@ -15,6 +15,7 @@ interface Props {
     placeholder?: string;
     placeholderTextColor?: string;
     style?: StyleProp<TextStyle>;
+    scale?: number;
 }
 
 export const EnrichedTitleInput: React.FC<Props> = ({
@@ -23,11 +24,16 @@ export const EnrichedTitleInput: React.FC<Props> = ({
     placeholder,
     placeholderTextColor,
     style,
+    scale = 1,
 }) => {
     return (
         <View style={style}>
             <TextInput
-                style={[styles.input, { writingDirection: 'auto', textAlign: 'auto' }]}
+                style={[
+                    styles.input,
+                    { writingDirection: 'auto', textAlign: 'auto' },
+                    scale !== 1 && { fontSize: 24 * scale },
+                ]}
                 value={value}
                 onChangeText={onChangeText}
                 placeholder={placeholder}

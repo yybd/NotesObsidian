@@ -30,6 +30,8 @@ interface Props {
     placeholderTextColor?: string;
     /** Outer container style. */
     style?: StyleProp<TextStyle>;
+    /** Multiplier applied to title font size. 1 = default. */
+    scale?: number;
 }
 
 // ─── Inline markdown ↔ HTML helpers ─────────────────────────────────────────
@@ -93,6 +95,7 @@ export const EnrichedTitleInput: React.FC<Props> = ({
     placeholder,
     placeholderTextColor,
     style,
+    scale = 1,
 }) => {
     const inputRef = useRef<EnrichedTextInputInstance | null>(null);
 
@@ -121,7 +124,11 @@ export const EnrichedTitleInput: React.FC<Props> = ({
                 defaultValue={initialHtml}
                 placeholder={placeholder}
                 placeholderTextColor={placeholderTextColor as any}
-                style={styles.input}
+                style={
+                    scale === 1
+                        ? styles.input
+                        : StyleSheet.flatten([styles.input, { fontSize: 24 * scale }])
+                }
                 useHtmlNormalizer={true}
                 onChangeHtml={(e) => {
                     const md = titleHtmlToMd(e.nativeEvent.value);

@@ -120,6 +120,10 @@ export const SmartEditor = forwardRef<SmartEditorRef, SmartEditorProps>(
         const { settings } = useNotesStore();
         // [INACTIVE] editorMode — תמיד richtext, בחירת מצב מושבתת (אבל משתמשים ב-settings כדי למנוע שגיאות טיפוס)
         const editorMode = settings.editorMode || 'richtext';
+        // Multiplier from the Settings text-size slider. Threaded to both
+        // editor implementations so the body font tracks the same setting
+        // as the notes-list display.
+        const textScale = settings.textScale ?? 1;
 
         const nativeEditorRef = useRef<NativeLiveEditorRef>(null);
         const tiptapEditorRef = useRef<TiptapEditorRef>(null);
@@ -365,6 +369,7 @@ export const SmartEditor = forwardRef<SmartEditorRef, SmartEditorProps>(
                     style={style as any}
                     backgroundColor={backgroundColor}
                     autoFocus={autoFocus}
+                    scale={textScale}
                 />
             );
         }
@@ -381,6 +386,7 @@ export const SmartEditor = forwardRef<SmartEditorRef, SmartEditorProps>(
                 style={style}
                 backgroundColor={backgroundColor}
                 autoFocus={autoFocus}
+                scale={textScale}
             />
         );
     },

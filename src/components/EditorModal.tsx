@@ -140,6 +140,9 @@ export const EditorModal = React.forwardRef<EditorModalRef, EditorModalProps>(({
     const { settings } = useNotesStore();
     // [INACTIVE] editorMode — תמיד richtext, בחירת מצב מושבתת
     const editorMode = 'richtext'; // settings.editorMode || 'richtext';
+    // Subscribe to the text-size slider so the title input rescales live
+    // alongside the body editor (SmartEditor reads it independently).
+    const textScale = settings.textScale ?? 1;
 
     const handleEditorRef = useCallback((r: SmartEditorRef | null) => {
         editorRef.current = r;
@@ -400,10 +403,11 @@ export const EditorModal = React.forwardRef<EditorModalRef, EditorModalProps>(({
                                         onChangeText={onTitleChange ?? (() => {})}
                                         placeholder={t('title_placeholder')}
                                         placeholderTextColor="#999"
+                                        scale={textScale}
                                     />
                                 ) : (
                                     <TextInput
-                                        style={[styles.titleInput, { writingDirection: 'auto', textAlign: 'auto' }]}
+                                        style={[styles.titleInput, { fontSize: 24 * textScale, writingDirection: 'auto', textAlign: 'auto' }]}
                                         value={title}
                                         onChangeText={onTitleChange}
                                         placeholder={t('title_placeholder')}

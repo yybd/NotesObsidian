@@ -69,6 +69,8 @@ export interface TiptapEditorProps {
     style?: StyleProp<ViewStyle>;
     autoFocus?: boolean;
     backgroundColor?: string;
+    /** Multiplier applied to body font size. 1 = default. Updates live. */
+    scale?: number;
 }
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
@@ -173,6 +175,7 @@ export const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(
             style,
             autoFocus = false,
             backgroundColor = 'transparent',
+            scale = 1,
         },
         ref,
     ) => {
@@ -210,6 +213,32 @@ export const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(
         const wasFocused = React.useRef(false);
         const dirInjected = React.useRef(false);
 
+        // Update (or insert) a single <style id="user-font-scale"> element
+        // inside the WebView's document. This sidesteps having to rebuild
+        // the whole CSS-via-CoreBridge.configureCSS pipeline and keeps the
+        // editor's content state intact when the slider is dragged.
+        const applyScale = React.useCallback((s: number) => {
+            const fs = 16 * s;
+            editor.injectJS(`
+                (function() {
+                    var el = document.getElementById('user-font-scale');
+                    if (!el) {
+                        el = document.createElement('style');
+                        el.id = 'user-font-scale';
+                        document.head.appendChild(el);
+                    }
+                    el.textContent = '.ProseMirror{font-size:${fs}px !important;}';
+                })();
+            `);
+        }, [editor]);
+
+        // Re-apply when the user moves the Settings slider after the editor
+        // is already mounted. The first apply happens on the isReady effect.
+        React.useEffect(() => {
+            if (!editorState.isReady) return;
+            applyScale(scale);
+        }, [scale, editorState.isReady, applyScale]);
+
         React.useEffect(() => {
             const focused = editorState.isFocused;
             if (focused && !wasFocused.current) {
@@ -229,6 +258,9 @@ export const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(
                 document.body.setAttribute('dir', 'auto');
             `);
             onReady?.();
+            // Inject (or refresh) the user-font-scale stylesheet so the
+            // initial scale is honored as soon as the WebView is ready.
+            applyScale(scale);
             // Explicit focus once the editor is genuinely ready. The bridge's
             // built-in `autofocus` option is set during mount but can lose the
             // race with the modal animation on a cold WebView — by the time

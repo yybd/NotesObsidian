@@ -33,7 +33,7 @@ import { DomainType } from '../types/Note';
 import { RTL_TEXT_STYLE } from '../utils/rtlUtils';
 import { USE_NATIVE_EDITOR } from '../config/editorMode';
 import {
-    SURROUND_COLOR,
+    EDITOR_SURROUND_COLOR,
     EDITOR_CARD_RADIUS,
     EDITOR_CARD_INSET,
     EDITOR_TOP_OFFSET,
@@ -583,13 +583,13 @@ EditorModal.displayName = 'EditorModal';
 const styles = StyleSheet.create({
     modalOverlay: {
         flex: 1,
-        // Same gray as the centered modalSheet's background so the wings on
+        // Same color as the centered modalSheet's background so the wings on
         // wide screens are uniform with the writing surface surround.
-        backgroundColor: SURROUND_COLOR,
+        backgroundColor: EDITOR_SURROUND_COLOR,
     },
     modalSheet: {
         flex: 1,
-        backgroundColor: SURROUND_COLOR,
+        backgroundColor: EDITOR_SURROUND_COLOR,
         // Cap the writing surface on wide screens so the editor stays
         // readable instead of stretching to ~1500 px on web.
         width: '100%',
@@ -602,12 +602,17 @@ const styles = StyleSheet.create({
         // (right) regardless of locale — matches the previous bottomBar.
         direction: 'ltr',
         alignItems: 'center',
-        // Match the editor window's gray surround (modalSheet background) so
-        // the row blends seamlessly with the area surrounding the editor.
-        backgroundColor: SURROUND_COLOR,
+        // Match the editor window's surround so the row blends with the
+        // area around the editor.
+        backgroundColor: EDITOR_SURROUND_COLOR,
         paddingHorizontal: 16,
         paddingVertical: 8,
         gap: 8,
+        // Bottom hairline of the writing window in minimal mode — sits
+        // here (last child of modalSheet) so it spans only the modalSheet
+        // width, not the full screen like the toolbar below.
+        borderBottomWidth: EDITOR_BORDER_WIDTH,
+        borderBottomColor: EDITOR_BORDER_COLOR,
     },
     // Wraps DomainSelector so it grows to fill the row, leaving the send
     // button at the trailing edge instead of stretching across.
@@ -684,11 +689,6 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
         borderTopWidth: 1,
         borderTopColor: '#E0E0E0',
-        // Bottom hairline of the writing window in minimal mode — sits
-        // between the toolbar and the domain selector row, completing the
-        // top-and-bottom-line frame around the writing surface.
-        borderBottomWidth: EDITOR_BORDER_WIDTH,
-        borderBottomColor: EDITOR_BORDER_COLOR,
         paddingHorizontal: 4,
     },
     sendButtonModal: {

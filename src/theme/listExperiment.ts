@@ -55,6 +55,13 @@ export const CARD_SEPARATOR_WIDTH = isMinimal ? StyleSheet.hairlineWidth : 0;
 export const CARD_SEPARATOR_COLOR = '#000000';
 
 // Editor modal — write / edit window.
+//
+// In minimal mode the modal surround is white (no gray fill) and the
+// writing window is bracketed by two black hairlines that span only
+// the width of the centered modalSheet — not the full screen, even on
+// wide displays where the toolbar (which lives outside modalSheet)
+// extends to both edges.
+export const EDITOR_SURROUND_COLOR = isMinimal ? '#FFFFFF' : '#F0F2F5';
 export const EDITOR_CARD_RADIUS = isMinimal ? 0 : 12;
 export const EDITOR_CARD_INSET = isMinimal ? 0 : 20;
 // Vertical breathing gap above the writing window so the top hairline

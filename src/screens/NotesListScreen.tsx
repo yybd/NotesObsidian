@@ -29,6 +29,7 @@ import { Note, DomainType } from '../types/Note';
 import { useKeyboardHeight } from '../hooks/useKeyboardHeight';
 import {
     LIST_BACKGROUND,
+    LIST_FADE_ENABLED,
     LIST_FADE_HEIGHT,
     SURROUND_RGB,
     CARD_GAP,
@@ -530,8 +531,10 @@ export const NotesListScreen = ({ navigation }: any) => {
             />
                 {/* Top fade: solid gray at the very top (touching the
                     Header), transparent at the bottom edge so the list
-                    shows through cleanly while scrolling under it. */}
-                <ScrollFade style={styles.topBlur} solidEdge="top" />
+                    shows through cleanly while scrolling under it.
+                    Disabled in minimal mode where the hairline dividers
+                    already provide a clean edge. */}
+                {LIST_FADE_ENABLED && <ScrollFade style={styles.topBlur} solidEdge="top" />}
             </View>
 
             {/* Bottom Section - Quick Note Input */}
@@ -547,8 +550,9 @@ export const NotesListScreen = ({ navigation }: any) => {
                 >
                     {/* Bottom fade: solid gray at the very bottom (touching
                         the QuickAdd bar), transparent at the top edge so the
-                        list dissolves into it without a hard line. */}
-                    <ScrollFade style={styles.bottomBlur} solidEdge="bottom" />
+                        list dissolves into it without a hard line. Disabled
+                        in minimal mode (see top fade above). */}
+                    {LIST_FADE_ENABLED && <ScrollFade style={styles.bottomBlur} solidEdge="bottom" />}
                     <QuickAddInput
                         text={quickNoteText}
                         isSending={isSending}

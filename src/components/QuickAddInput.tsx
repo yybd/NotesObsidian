@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { SURROUND_COLOR } from '../theme/listExperiment';
+import { SURROUND_COLOR, CHROME_FULL_WIDTH } from '../theme/listExperiment';
 
 interface QuickAddInputProps {
     text: string;
@@ -36,40 +36,52 @@ export const QuickAddInput: React.FC<QuickAddInputProps> = ({
     const previewText = text.trim() || null;
 
     return (
-        <View style={[styles.bar, { paddingBottom: bottomPadding }]}>
-            <TouchableOpacity
-                style={styles.fakeInput}
-                onPress={onOpenModal}
-                activeOpacity={0.7}
-            >
-                <Text style={previewText ? styles.previewText : styles.placeholder} numberOfLines={1}>
-                    {previewText ?? t('add_note_placeholder')}
-                </Text>
-            </TouchableOpacity>
+        // Outer wrapper paints the gray chrome (full-width in minimal,
+        // capped at 720 in default). Inner row holds the controls and
+        // always stays capped at 720 so they sit on the readable rail.
+        <View style={[styles.barOuter, { paddingBottom: bottomPadding }]}>
+            <View style={styles.barInner}>
+                <TouchableOpacity
+                    style={styles.fakeInput}
+                    onPress={onOpenModal}
+                    activeOpacity={0.7}
+                >
+                    <Text style={previewText ? styles.previewText : styles.placeholder} numberOfLines={1}>
+                        {previewText ?? t('add_note_placeholder')}
+                    </Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-                style={[styles.sendButton, (!text.trim() || isSending) && styles.sendButtonDisabled]}
-                onPress={onSend}
-                disabled={!text.trim() || isSending}
-            >
-                {isSending
-                    ? <ActivityIndicator size="small" color="#000000" />
-                    : <Ionicons name="send" size={20} color="#000000" />}
-            </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.sendButton, (!text.trim() || isSending) && styles.sendButtonDisabled]}
+                    onPress={onSend}
+                    disabled={!text.trim() || isSending}
+                >
+                    {isSending
+                        ? <ActivityIndicator size="small" color="#000000" />
+                        : <Ionicons name="send" size={20} color="#000000" />}
+                </TouchableOpacity>
+            </View>
         </View>
     );
 };
 
 const styles = StyleSheet.create({
-    bar: {
+    // Outer chrome strip — paints the gray. In minimal it spans the full
+    // screen; in default it stays capped at 720 px (the original look).
+    barOuter: {
+        backgroundColor: SURROUND_COLOR,
+        width: '100%',
+        ...(CHROME_FULL_WIDTH ? null : { maxWidth: 720, alignSelf: 'center' as const }),
+    },
+    // Inner row — the input + send button. Always capped at 720 so the
+    // controls stay on the readable rail on wide screens.
+    barInner: {
         flexDirection: 'row',
         direction: 'ltr',
         alignItems: 'center',
-        backgroundColor: SURROUND_COLOR,
         paddingHorizontal: 16,
         paddingTop: 10,
         gap: 8,
-        // Cap readable width on wide screens (web/tablet).
         width: '100%',
         maxWidth: 720,
         alignSelf: 'center',

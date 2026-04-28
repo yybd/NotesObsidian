@@ -33,10 +33,18 @@ export const SURROUND_RGB = '240, 242, 245';
 // black dividers separate them.
 export const LIST_BACKGROUND = isMinimal ? '#FFFFFF' : '#F0F2F5';
 
-// Height of the soft fade strips at the top and bottom of the list.
-// Smaller in minimal so the hairline dividers stay visible right up to
-// the chrome edge instead of dissolving into a thick blur.
-export const LIST_FADE_HEIGHT = isMinimal ? 10 : 12;
+// Soft fade strips at the top and bottom of the list. In minimal mode
+// the fade is turned off entirely — the hairline dividers already
+// provide a clean edge against the gray chrome, and the fade muddied
+// the topmost / bottommost line.
+export const LIST_FADE_ENABLED = !isMinimal;
+export const LIST_FADE_HEIGHT = 12;
+
+// In minimal mode the gray chrome strips (header search row, QuickAdd
+// bar) span the FULL screen width — only the controls inside them stay
+// capped at the readable 720 px rail. In default mode the gray itself
+// is also capped to 720 px (original behavior).
+export const CHROME_FULL_WIDTH = isMinimal;
 
 // Cards in the list.
 export const CARD_RADIUS = isMinimal ? 0 : 16;

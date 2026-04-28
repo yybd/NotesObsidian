@@ -7,7 +7,7 @@ import { RTL_TEXT_STYLE } from '../utils/rtlUtils';
 import { SearchBar } from './SearchBar';
 import { DomainSelector } from './DomainSelector';
 import { DomainType } from '../types/Note';
-import { SURROUND_COLOR } from '../theme/listExperiment';
+import { SURROUND_COLOR, CHROME_FULL_WIDTH } from '../theme/listExperiment';
 
 interface HeaderProps {
     title: string;
@@ -68,23 +68,29 @@ export const Header: React.FC<HeaderProps> = ({
                 <View style={styles.iconPlaceholder} />
             </View>
 
-            {/* Search Bar & Domain Filter */}
+            {/* Search Bar & Domain Filter
+                Outer wrapper paints the gray chrome (full-width in
+                minimal, capped to 720 in default). Inner wrapper holds
+                the actual controls and stays capped to the readable
+                rail in both variants. */}
             {!hideSearchAndDomain && (
-                <View style={styles.searchContainer}>
-                    <SearchBar
-                        onSearch={onSearch}
-                        onFocus={onSearchFocus}
-                        onBlur={onSearchBlur}
-                        placeholder={t('search_placeholder')}
-                    />
-                    {!isSearchFocused && (
-                        <DomainSelector
-                            selectedDomain={currentDomain}
-                            onSelectDomain={onFilterByDomain}
-                            domainCounts={domainCounts}
-                            mode="filter"
+                <View style={styles.searchContainerOuter}>
+                    <View style={styles.searchContainerInner}>
+                        <SearchBar
+                            onSearch={onSearch}
+                            onFocus={onSearchFocus}
+                            onBlur={onSearchBlur}
+                            placeholder={t('search_placeholder')}
                         />
-                    )}
+                        {!isSearchFocused && (
+                            <DomainSelector
+                                selectedDomain={currentDomain}
+                                onSelectDomain={onFilterByDomain}
+                                domainCounts={domainCounts}
+                                mode="filter"
+                            />
+                        )}
+                    </View>
                 </View>
             )}
         </View>
@@ -115,14 +121,20 @@ const styles = StyleSheet.create({
     iconPlaceholder: {
         width: 40,
     },
-    searchContainer: {
+    // Outer chrome strip — paints the gray. In minimal it spans the full
+    // screen; in default it stays capped at 720 px (the original look).
+    searchContainerOuter: {
+        backgroundColor: SURROUND_COLOR,
+        zIndex: 10,
+        width: '100%',
+        ...(CHROME_FULL_WIDTH ? null : { maxWidth: 720, alignSelf: 'center' as const }),
+    },
+    // Inner content — the search and domain controls themselves. Always
+    // capped at 720 px so the controls stay readable on wide screens.
+    searchContainerInner: {
         paddingHorizontal: 20,
         paddingTop: 16,
         paddingBottom: 8,
-        backgroundColor: SURROUND_COLOR,
-        zIndex: 10,
-        // Cap the readable width on wide screens (web / large tablets) so
-        // the search and domain filter don't stretch edge-to-edge.
         width: '100%',
         maxWidth: 720,
         alignSelf: 'center',

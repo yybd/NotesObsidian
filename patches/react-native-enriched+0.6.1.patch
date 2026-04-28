@@ -180,3 +180,121 @@ index 66c2251..6e6aa2e 100644
 +}
 +
  @end
+diff --git a/node_modules/react-native-enriched/ios/extensions/LayoutManagerExtension.mm b/node_modules/react-native-enriched/ios/extensions/LayoutManagerExtension.mm
+index 58f4620..0462232 100644
+--- a/node_modules/react-native-enriched/ios/extensions/LayoutManagerExtension.mm
++++ b/node_modules/react-native-enriched/ios/extensions/LayoutManagerExtension.mm
+@@ -299,6 +299,23 @@ - (void)drawLists:(EnrichedTextInputView *)typedInput
+                                          [self getTextAlignedUsedRect:usedRect
+                                                                  font:font];
+ 
++                                     // PureNotes patch: detect paragraph
++                                     // direction from the live text-storage
++                                     // pStyle (set by refreshParagraphDirections
++                                     // in EnrichedTextInputView). For RTL
++                                     // paragraphs the marker has to be drawn
++                                     // on the RIGHT of the line's used rect
++                                     // instead of the LEFT.
++                                     NSParagraphStyle *livePStyle =
++                                         [typedInput->textView.textStorage
++                                              attribute:
++                                                  NSParagraphStyleAttributeName
++                                                atIndex:charIdx
++                                         effectiveRange:nil];
++                                     BOOL isRTL =
++                                         livePStyle.baseWritingDirection ==
++                                         NSWritingDirectionRightToLeft;
++
+                                      NSString *markerFormat =
+                                          pStyle.textLists.firstObject
+                                              .markerFormat;
+@@ -313,21 +330,24 @@ - (void)drawLists:(EnrichedTextInputView *)typedInput
+                                                      marker:marker
+                                            markerAttributes:markerAttributes
+                                                      origin:origin
+-                                                   usedRect:usedRect];
++                                                   usedRect:usedRect
++                                                      isRTL:isRTL];
+                                      } else if ([markerFormat
+                                                     isEqualToString:
+                                                         @"EnrichedUnorderedLis"
+                                                         @"t"]) {
+                                        [self drawBullet:typedInput
+                                                  origin:origin
+-                                               usedRect:textUsedRect];
++                                               usedRect:textUsedRect
++                                                  isRTL:isRTL];
+                                      } else if ([markerFormat
+                                                     hasPrefix:
+                                                         @"EnrichedCheckbox"]) {
+                                        [self drawCheckbox:typedInput
+                                              markerFormat:markerFormat
+                                                    origin:origin
+-                                                 usedRect:textUsedRect];
++                                                 usedRect:textUsedRect
++                                                    isRTL:isRTL];
+                                      }
+                                      // only first line of a list gets its
+                                      // marker drawn
+@@ -395,7 +415,8 @@ - (CGRect)getTextAlignedUsedRect:(CGRect)usedRect font:(UIFont *)font {
+ - (void)drawCheckbox:(EnrichedTextInputView *)typedInput
+         markerFormat:(NSString *)markerFormat
+               origin:(CGPoint)origin
+-            usedRect:(CGRect)usedRect {
++            usedRect:(CGRect)usedRect
++               isRTL:(BOOL)isRTL {
+   BOOL isChecked = [markerFormat isEqualToString:@"EnrichedCheckbox1"];
+ 
+   UIImage *image = isChecked ? typedInput->config.checkboxCheckedImage
+@@ -404,7 +425,12 @@ - (void)drawCheckbox:(EnrichedTextInputView *)typedInput
+   CGFloat boxSize = [typedInput->config checkboxListBoxSize];
+ 
+   CGFloat centerY = CGRectGetMidY(usedRect) + origin.y;
+-  CGFloat boxX = origin.x + usedRect.origin.x - gapWidth - boxSize;
++  // PureNotes patch: mirror box X for RTL paragraphs. Original LTR formula
++  // anchors the box's right edge at `usedRect.origin.x - gapWidth`. For RTL
++  // we anchor the box's left edge at `usedRect right edge + gapWidth`.
++  CGFloat boxX = isRTL
++      ? origin.x + CGRectGetMaxX(usedRect) + gapWidth
++      : origin.x + usedRect.origin.x - gapWidth - boxSize;
+   CGFloat boxY = centerY - boxSize / 2.0;
+ 
+   [image drawAtPoint:CGPointMake(boxX, boxY)];
+@@ -412,10 +438,16 @@ - (void)drawCheckbox:(EnrichedTextInputView *)typedInput
+ 
+ - (void)drawBullet:(EnrichedTextInputView *)typedInput
+             origin:(CGPoint)origin
+-          usedRect:(CGRect)usedRect {
++          usedRect:(CGRect)usedRect
++             isRTL:(BOOL)isRTL {
+   CGFloat gapWidth = [typedInput->config unorderedListGapWidth];
+   CGFloat bulletSize = [typedInput->config unorderedListBulletSize];
+-  CGFloat bulletX = origin.x + usedRect.origin.x - gapWidth - bulletSize / 2;
++  // PureNotes patch: mirror bullet X for RTL paragraphs. CGContextAddArc
++  // takes the CENTER of the circle, so we offset by bulletSize/2 from the
++  // gap edge in either direction.
++  CGFloat bulletX = isRTL
++      ? origin.x + CGRectGetMaxX(usedRect) + gapWidth + bulletSize / 2
++      : origin.x + usedRect.origin.x - gapWidth - bulletSize / 2;
+   CGFloat centerY = CGRectGetMidY(usedRect) + origin.y;
+ 
+   CGContextRef context = UIGraphicsGetCurrentContext();
+@@ -433,10 +465,16 @@ - (void)drawDecimal:(EnrichedTextInputView *)typedInput
+               marker:(NSString *)marker
+     markerAttributes:(NSDictionary *)markerAttributes
+               origin:(CGPoint)origin
+-            usedRect:(CGRect)usedRect {
++            usedRect:(CGRect)usedRect
++               isRTL:(BOOL)isRTL {
+   CGFloat gapWidth = [typedInput->config orderedListGapWidth];
+   CGSize markerSize = [marker sizeWithAttributes:markerAttributes];
+-  CGFloat markerX = usedRect.origin.x - gapWidth - markerSize.width / 2;
++  // PureNotes patch: mirror marker X for RTL paragraphs. Mirror of the
++  // existing LTR formula `usedRect.origin.x - gapWidth - markerSize.width/2`
++  // around the line's right edge.
++  CGFloat markerX = isRTL
++      ? CGRectGetMaxX(usedRect) + gapWidth - markerSize.width / 2
++      : usedRect.origin.x - gapWidth - markerSize.width / 2;
+   CGFloat centerY = CGRectGetMidY(usedRect) + origin.y;
+   CGFloat markerY = centerY - markerSize.height / 2.0;
+ 

@@ -13,6 +13,7 @@ import {
     Platform,
     ActivityIndicator,
     StyleSheet,
+    BackHandler,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
@@ -69,6 +70,20 @@ export interface EditorModalProps {
     showTitle?: boolean;
     /** Show domain selector in compact mode (single chip). */
     compactDomain?: boolean;
+    /**
+     * When true, render with a permanent screen-level View overlay (instead
+     * of RN <Modal>) and pre-mount the SmartEditor at app start regardless
+     * of `visible`. The whole purpose: keep the WKWebView in the visible
+     * window from t=0 so iOS launches the WebContent process in the
+     * background while the user is still browsing the notes list. The
+     * first tap is then instant rather than paying a 4-6 s WebKit cold start.
+     *
+     * Use SPARINGLY — every eagerMount=true instance keeps a permanent
+     * WebView alive, which costs ~30-50 MB on iOS. Reserve this for the
+     * single most-frequent flow (QuickAdd). Other flows (Edit) should stay
+     * lazy-mounted on visible to avoid resource competition.
+     */
+    eagerMount?: boolean;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -89,6 +104,7 @@ export const EditorModal = React.forwardRef<EditorModalRef, EditorModalProps>(({
     onTitleChange,
     showTitle = false,
     compactDomain = false,
+    eagerMount = false,
 }, ref) => {
     const { t } = useTranslation();
     const [showDomainToast, setShowDomainToast] = useState(false);
@@ -112,16 +128,23 @@ export const EditorModal = React.forwardRef<EditorModalRef, EditorModalProps>(({
         }
     }, [editorMode]);
 
-    // Mount the SmartEditor on the FIRST visible=true and keep it mounted
-    // across every subsequent open/close cycle. We can't pre-mount inside
-    // the hidden Modal — iOS only launches the WebContent process once the
-    // WKWebView is in a visible window, and <Modal visible={false}> hides
-    // its children from the visible window. The cold-start mitigation for
-    // the FIRST tap is handled by <EditorPrewarm /> at App root — a
-    // separate WKWebView positioned off-screen but in the visible window,
-    // which warms iOS WebKit's shared resources (GPU process + WebKit
-    // framework + kernel caches) ahead of the user's first tap.
-    const [shouldMountEditor, setShouldMountEditor] = useState(false);
+    // Mount the SmartEditor.
+    //
+    // - eagerMount=true: mount immediately on component mount (i.e. at app
+    //   start), regardless of `visible`. Combined with the View-overlay
+    //   render path below, this puts the WKWebView in the visible window
+    //   from t=0 — which is the trigger iOS needs to launch the WebContent
+    //   process. By the time the user taps "new note", the editor is alive.
+    //
+    // - eagerMount=false (default): lazy-mount on the FIRST visible=true.
+    //   Pre-mounting inside the hidden RN <Modal visible={false}> doesn't
+    //   help on iOS — Modal hides children from the visible window, so iOS
+    //   doesn't launch the WebContent process until visible flips true.
+    //
+    // Either way, once mounted the editor stays mounted across every
+    // open/close cycle (we never set shouldMountEditor back to false), so
+    // subsequent opens are instant.
+    const [shouldMountEditor, setShouldMountEditor] = useState(eagerMount);
     useEffect(() => {
         if (visible && !shouldMountEditor) {
             setShouldMountEditor(true);
@@ -139,19 +162,29 @@ export const EditorModal = React.forwardRef<EditorModalRef, EditorModalProps>(({
         const wasVisible = previousVisibleRef.current;
         previousVisibleRef.current = visible;
         if (!visible || wasVisible) return;
-        // Modal just opened. On the very first open editorRef is still
-        // null (the editor mounts after this effect commits) and SmartEditor's
-        // `initialContent` + `autoFocus` props handle setup. On every
-        // subsequent open the editor is already alive and sticky — we
-        // need to push the parent's text in and re-focus manually, since
-        // the autoFocus prop only takes effect on the editor's first mount.
+
         if (visible && editorRef.current) {
             editorRef.current.setText?.(textRef.current);
-            // Android needs a slight delay after the visibility change for the
-            // keyboard to reliably trigger on a pre-mounted WebView.
-            const delay = Platform.OS === 'android' ? 200 : 0;
-            setTimeout(() => editorRef.current?.focus?.(), delay);
+            // setTimeout(0) so this fires after the current commit settles.
+            setTimeout(() => editorRef.current?.focus?.(), 0);
         }
+    }, [visible]);
+
+    // Android Back Button handling. Uses a ref to handleClose so we can
+    // declare the effect before handleClose is defined (avoiding TDZ
+    // issues) and so we don't have to add handleClose to the deps array
+    // and re-register the listener every render.
+    const handleCloseRef = useRef<(() => void) | null>(null);
+    useEffect(() => {
+        if (Platform.OS !== 'android' || !visible) return;
+        const onBackPress = () => {
+            handleCloseRef.current?.();
+            return true;
+        };
+        // RN >= 0.65: addEventListener returns a subscription with .remove();
+        // the older `BackHandler.removeEventListener` API is gone in 0.74+.
+        const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+        return () => sub.remove();
     }, [visible]);
 
     // Track Tiptap WebView readiness so we can mask the empty editor area
@@ -222,6 +255,9 @@ export const EditorModal = React.forwardRef<EditorModalRef, EditorModalProps>(({
         if (fresh !== undefined && fresh !== text) onTextChange(fresh);
         onClose(fresh);
     };
+    // Mirror handleClose into the ref the BackHandler effect reads from.
+    // Updated on every render so the listener always invokes the latest version.
+    handleCloseRef.current = handleClose;
 
     // Web only: Cmd/Ctrl+S triggers the same flow as the send button. Held
     // in a ref so the listener always calls the latest handleSave (which
@@ -242,14 +278,10 @@ export const EditorModal = React.forwardRef<EditorModalRef, EditorModalProps>(({
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [visible]);
 
-    return (
-        <Modal
-            visible={visible}
-            animationType="fade"
-            transparent={true}
-            onRequestClose={handleClose}
-        >
-            <View style={[styles.modalOverlay, { paddingTop: insets.top }]}>
+    // Inner contents shared between the RN <Modal> and the View-overlay
+    // render paths. Hoisted so we don't duplicate ~100 lines of JSX.
+    const innerContents = (
+        <View style={[styles.modalOverlay, { paddingTop: insets.top }]}>
                 <KeyboardAvoidingView
                     style={{ flex: 1 }}
                     behavior="padding"
@@ -283,7 +315,7 @@ export const EditorModal = React.forwardRef<EditorModalRef, EditorModalProps>(({
                                     onChange={onTextChange}
                                     onEditorReady={() => setEditorReady(true)}
                                     placeholder=""
-                                    autoFocus={true}
+                                    autoFocus={false}
                                     backgroundColor="#FFFFFF"
                                     style={{ flex: 1 }}
                                 />
@@ -367,6 +399,36 @@ export const EditorModal = React.forwardRef<EditorModalRef, EditorModalProps>(({
                     )}
                 </KeyboardAvoidingView>
             </View>
+    );
+
+    // eagerMount path: render with a permanent screen-level View overlay.
+    // The View is always in the screen view tree, so the WKWebView inside
+    // is in the visible window from app start — iOS launches the
+    // WebContent process in the background while the user browses.
+    // opacity + pointerEvents toggle visibility instead of mounting.
+    if (eagerMount) {
+        return (
+            <View
+                style={[
+                    StyleSheet.absoluteFillObject,
+                    { opacity: visible ? 1 : 0, zIndex: 1000 },
+                ]}
+                pointerEvents={visible ? 'auto' : 'none'}
+            >
+                {innerContents}
+            </View>
+        );
+    }
+
+    // Default path: RN <Modal>. Lazy-mounts the editor on first visible=true.
+    return (
+        <Modal
+            visible={visible}
+            animationType="fade"
+            transparent={true}
+            onRequestClose={handleClose}
+        >
+            {innerContents}
         </Modal>
     );
 });

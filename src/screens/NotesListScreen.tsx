@@ -22,7 +22,7 @@ import FrontmatterService from '../services/FrontmatterService';
 import { handleListContinuation } from '../utils/markdownUtils';
 import { RTL_TEXT_STYLE } from '../utils/rtlUtils';
 import { Header } from '../components/Header';
-import { QuickAddInput, QuickAddInputRef } from '../components/QuickAddInput';
+import { QuickAddInput } from '../components/QuickAddInput';
 import { EditorModal, EditorModalRef } from '../components/EditorModal';
 import { EmptyNotesList } from '../components/EmptyNotesList';
 import { Note, DomainType } from '../types/Note';
@@ -96,10 +96,17 @@ export const NotesListScreen = ({ navigation }: any) => {
     const [refreshing, setRefreshing] = useState(false);
     const [isSearchFocused, setIsSearchFocused] = useState(false);
     const [isQuickNoteActive, setIsQuickNoteActive] = useState(false);
-    const quickAddInputRef = useRef<QuickAddInputRef>(null);
     const flatListRef = useRef<FlatList>(null);
     const insets = useSafeAreaInsets();
     const [showToast, setShowToast] = useState(false);
+
+    // ── QuickAdd modal state (lifted from QuickAddInput) ──────────────────
+    // The QuickAdd EditorModal is rendered here at NotesListScreen root with
+    // eagerMount=true so its WKWebView lives in the visible window from app
+    // launch — that's what makes the user's first "new note" tap instant
+    // (iOS pre-launches the WebContent process in the background).
+    const [quickAddModalVisible, setQuickAddModalVisible] = useState(false);
+    const quickAddEditorRef = useRef<EditorModalRef>(null);
 
     // ── Edit-note modal state ─────────────────────────────────────────────
     const [editModalVisible, setEditModalVisible] = useState(false);
@@ -122,8 +129,10 @@ export const NotesListScreen = ({ navigation }: any) => {
                     const draft = JSON.parse(draftStr);
                     if (draft.text) {
                         setQuickNoteText(draft.text);
-                        // Make sure EditorModal sees this text when opened next time
-                        setTimeout(() => quickAddInputRef.current?.setTextAndSelection(draft.text, {start: draft.text.length, end: draft.text.length}), 100);
+                        // Push the draft text into the (always-mounted) QuickAdd
+                        // editor. EditorModal's open-transition effect also
+                        // pushes on first open, so this is a defensive sync.
+                        setTimeout(() => quickAddEditorRef.current?.setTextAndSelection(draft.text, {start: draft.text.length, end: draft.text.length}), 100);
                     }
                     if (draft.isPinned !== undefined) setQuickNotePinned(draft.isPinned);
                     if (draft.domain !== undefined) setQuickNoteDomain(draft.domain);
@@ -174,23 +183,12 @@ export const NotesListScreen = ({ navigation }: any) => {
         };
     }, []);
 
-    // Try opening the modal reliably when state is set
+    // Open the QuickAdd modal when a deep link requests it (iOS Widget).
     useEffect(() => {
         if (!shouldOpenQuickAdd) return;
-
-        let retryCount = 0;
-        const openWhenReady = () => {
-            if (quickAddInputRef.current) {
-                quickAddInputRef.current.openModal();
-                setShouldOpenQuickAdd(false); // reset
-            } else if (retryCount < 10) {
-                retryCount++;
-                setTimeout(openWhenReady, 100);
-            } else {
-                setShouldOpenQuickAdd(false); // give up after 1s
-            }
-        };
-        openWhenReady();
+        setQuickAddModalVisible(true);
+        setIsQuickNoteActive(true);
+        setShouldOpenQuickAdd(false);
     }, [shouldOpenQuickAdd]);
 
     // The previous AppState listener here called loadNotes() on every
@@ -212,7 +210,7 @@ export const NotesListScreen = ({ navigation }: any) => {
                 if (editModalVisible) return;
 
                 if (quickNoteText) {
-                    quickAddInputRef.current?.clear();
+                    quickAddEditorRef.current?.clear();
                     setQuickNoteText('');
                     setQuickNotePinned(false);
                     setQuickNoteDomain(null);
@@ -245,7 +243,7 @@ export const NotesListScreen = ({ navigation }: any) => {
             if (result.cursorShouldMove) {
                 const newSelection = { start: result.newCursorPos, end: result.newCursorPos };
                 if (setText === setQuickNoteText) {
-                    quickAddInputRef.current?.setTextAndSelection(result.modifiedText, newSelection);
+                    quickAddEditorRef.current?.setTextAndSelection(result.modifiedText, newSelection);
                 }
             }
             setText(result.modifiedText);
@@ -321,8 +319,9 @@ export const NotesListScreen = ({ navigation }: any) => {
         // user gets instant feedback. Persistence happens in the background.
         setIsSending(true);
         Keyboard.dismiss();
-        quickAddInputRef.current?.blur();
-        quickAddInputRef.current?.clear();
+        setQuickAddModalVisible(false);
+        quickAddEditorRef.current?.blur();
+        quickAddEditorRef.current?.clear();
         setQuickNoteText('');
         setQuickNotePinned(false);
         setQuickNoteDomain(null);
@@ -537,25 +536,46 @@ export const NotesListScreen = ({ navigation }: any) => {
                         list dissolves into it without a hard line. */}
                     <ScrollFade style={styles.bottomBlur} solidEdge="bottom" />
                     <QuickAddInput
-                        ref={quickAddInputRef}
                         text={quickNoteText}
-                        isPinned={quickNotePinned}
-                        domain={quickNoteDomain}
                         isSending={isSending}
                         bottomPadding={Platform.OS === 'android' ? Math.max(insets.bottom, 60) : (insets.bottom > 0 ? insets.bottom : 16)}
-                        onTextChange={(text) => handleTextChangeWithListContinuation(text, quickNoteText, setQuickNoteText)}
-                        onPinChange={(newPinned) => {
-                            setQuickNotePinned(newPinned);
+                        onOpenModal={() => {
+                            setQuickAddModalVisible(true);
+                            setIsQuickNoteActive(true);
                         }}
-                        onDomainChange={setQuickNoteDomain}
                         onSend={handleSendNote}
-                        onFocus={() => setIsQuickNoteActive(true)}
-                        onBlur={() => setIsQuickNoteActive(false)}
                     />
                 </View>
             )}
 
-            {/* Edit Note Modal — same UI as QuickAddInput modal */}
+            {/* QuickAdd EditorModal — eagerMount=true keeps the SmartEditor's
+                WKWebView in the visible window from app launch, so iOS
+                pre-launches the WebContent process while the user is still
+                browsing the notes list. By the time they tap "new note",
+                the editor is already alive — no 4-6 s WebKit cold start. */}
+            <EditorModal
+                ref={quickAddEditorRef}
+                visible={quickAddModalVisible}
+                text={quickNoteText}
+                domain={quickNoteDomain}
+                isPinned={quickNotePinned}
+                isSaving={isSending}
+                onTextChange={(text) => handleTextChangeWithListContinuation(text, quickNoteText, setQuickNoteText)}
+                onDomainChange={setQuickNoteDomain}
+                onPinChange={setQuickNotePinned}
+                onSave={handleSendNote}
+                onClose={() => {
+                    setQuickAddModalVisible(false);
+                    setIsQuickNoteActive(false);
+                }}
+                requireDomain={true}
+                eagerMount={true}
+            />
+
+            {/* Edit Note Modal — lazy-mounted on first use (one-time cold
+                start on first edit per session). Editing is less frequent
+                than adding new notes, so we don't pay the always-mounted
+                memory cost for it. */}
             <EditorModal
                 ref={editModalRef}
                 visible={editModalVisible}

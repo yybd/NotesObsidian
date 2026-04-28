@@ -9,7 +9,7 @@
 // For NoteEditorScreen the editor sits in a flex:1 View.
 
 import React, { forwardRef, useImperativeHandle } from 'react';
-import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { View, StyleSheet, StyleProp, ViewStyle, Platform } from 'react-native';
 import {
     RichText,
     useEditorBridge,
@@ -210,8 +210,7 @@ export const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(
             // Tiptap is ready to accept focus, the autofocus pulse is already
             // gone, leaving the user staring at an editor with no caret.
             if (autoFocus) {
-                const delay = Platform.OS === 'android' ? 250 : 0;
-                setTimeout(() => editor.focus(), delay);
+                editor.focus();
             }
         // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [editorState.isReady]);
@@ -226,7 +225,9 @@ export const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(
 
         return (
             <View style={styles.container}>
-                <RichText editor={editor} />
+                <RichText
+                    editor={editor}
+                />
             </View>
         );
     },

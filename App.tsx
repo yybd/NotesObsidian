@@ -18,7 +18,6 @@ const Stack = createNativeStackNavigator();
 
 import { useNotesStore } from './src/stores/notesStore';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { EditorPrewarm } from './src/components/EditorPrewarm';
 
 // Synchronous check — runs before the app renders so we can hard-block
 // unsupported browsers entirely (no NavigationContainer, no notes UI).
@@ -126,15 +125,13 @@ export default function App() {
           />
         </Stack.Navigator>
       </NavigationContainer>
-      {/* iOS WebKit warm-up. Renders eagerly at App root with its
-          WKWebView in the visible window from t=0 (positioned offscreen).
-          Best-effort — iOS aggressively kills WebContent processes for
-          non-browser apps without the com.apple.developer.web-browser-engine
-          entitlements, so the warm-up benefit may be reclaimed by iOS
-          before the user taps. The fundamental WebView cold-start on iPad
-          (4-10 s) cannot be fully eliminated for this app type — see
-          Apple's Press Restrictions on browser-engine entitlements. */}
-      <EditorPrewarm />
+      {/* The previous <EditorPrewarm /> here was a SEPARATE WebView
+          warming kernel/framework caches — its benefit was indirect at
+          best because each WKWebView gets its own process pool by default
+          on iOS, so the modal's actual WebView still paid full cold-start
+          cost. It has been replaced by `eagerMount={true}` on the QuickAdd
+          EditorModal in NotesListScreen, which keeps the ACTUAL editor's
+          WebView alive in the visible window from app launch. */}
     </GestureHandlerRootView>
   );
 }

@@ -638,9 +638,10 @@ const NoteCardImpl: React.FC<NoteCardProps> = ({ note, onPress, onUpdate, onDism
                                 } : undefined}
                             />
                         </View>
-                        {!isExpanded && hasMore && (
-                            <View style={styles.gradientOverlay} />
-                        )}
+                        {/* gradientOverlay (the white fade at the bottom
+                            of long collapsed notes) was removed — content
+                            now hard-clips at the maxHeight so the user
+                            sees a clean cut instead of a fade. */}
                     </View>
                 )}
     
@@ -850,16 +851,6 @@ const styles = StyleSheet.create({
     expandHint: {
         alignItems: 'center',
         marginTop: 8,
-    },
-    gradientOverlay: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 40,
-        backgroundColor: 'rgba(255,255,255,0.85)',
-        borderBottomLeftRadius: 16,
-        borderBottomRightRadius: 16,
     },
     quickAddRow: {
         flexDirection: 'row',

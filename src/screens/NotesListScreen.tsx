@@ -431,7 +431,7 @@ export const NotesListScreen = ({ navigation }: any) => {
                 style={styles.archiveAction}
                 onPress={() => handleArchive(item)}
             >
-                <Ionicons name="archive-outline" size={24} color="#FFF" />
+                <Ionicons name="archive-outline" size={24} color="#000000" />
                 <Text style={styles.archiveText}>{t('to_archive')}</Text>
             </TouchableOpacity>
         );
@@ -680,15 +680,17 @@ const styles = StyleSheet.create({
         alignSelf: 'center',
     },
     archiveAction: {
-        backgroundColor: '#FF9800',
+        backgroundColor: '#FFFFFF',
         justifyContent: 'center',
         alignItems: 'center',
         width: 80,
         height: '100%',
         borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#000000',
     },
     archiveText: {
-        color: '#FFFFFF',
+        color: '#000000',
         fontSize: 12,
         marginTop: 4,
         fontWeight: '500',

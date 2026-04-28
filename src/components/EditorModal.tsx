@@ -165,8 +165,18 @@ export const EditorModal = React.forwardRef<EditorModalRef, EditorModalProps>(({
 
         if (visible && editorRef.current) {
             editorRef.current.setText?.(textRef.current);
-            // setTimeout(0) so this fires after the current commit settles.
-            setTimeout(() => editorRef.current?.focus?.(), 0);
+            // Retry focus with progressive backoff. iOS WKWebView sometimes
+            // drops the first focus call right after a layout transition
+            // (here: the visible flip triggers translateY 0 → screen, which
+            // is essentially a layout change for the WebView). Retrying
+            // 0/100/300 ms after handles that reliably without delaying
+            // the keyboard for users with a warm WebView.
+            const timers = [0, 100, 300].map(delay =>
+                setTimeout(() => {
+                    if (previousVisibleRef.current) editorRef.current?.focus?.();
+                }, delay),
+            );
+            return () => timers.forEach(clearTimeout);
         }
     }, [visible]);
 
@@ -213,20 +223,34 @@ export const EditorModal = React.forwardRef<EditorModalRef, EditorModalProps>(({
         }, LOADER_DELAY_MS);
         return () => clearTimeout(id);
     }, [visible]);
-    // Hide the spinner the moment the editor reports ready. Also fires
-    // a manual focus if the modal is currently visible — handles the race
-    // where the user tapped "new note" before the WebView finished its
-    // cold start. In that case the open-transition effect already fired
-    // (with editorRef.current possibly not-yet-ready) and the focus call
-    // was a no-op or queued; this effect picks it up when ready.
+    // Hide the spinner the moment the editor reports ready, and aggressively
+    // re-focus when the user tapped "new note" before the WebView finished
+    // its cold start.
+    //
+    // WHY MULTIPLE RETRIES: iOS WKWebView empirically drops the first 1-2
+    // focus() calls on a freshly-loaded WebView — the bridge accepts the
+    // command but the contenteditable inside doesn't actually receive focus
+    // (no caret, no keyboard). Retrying with progressive backoff gives the
+    // WebView time to settle. Without this the user sees a fully-loaded
+    // editor area but has to tap manually to start typing — exactly the UX
+    // bug reported on iPad when tapping within the 4 s cold-start window.
+    // Once one of these focus calls sticks, the editor becomes interactive
+    // and subsequent calls are harmless no-ops.
     const visibleRef = useRef(visible);
     visibleRef.current = visible;
     useEffect(() => {
         if (!editorReady) return;
         setShowLoader(false);
-        if (visibleRef.current && editorRef.current) {
-            setTimeout(() => editorRef.current?.focus?.(), 0);
-        }
+        if (!visibleRef.current || !editorRef.current) return;
+        // Re-push the text in case the open-transition's setText was a
+        // no-op against a not-yet-ready editor.
+        editorRef.current.setText?.(textRef.current);
+        const timers = [50, 200, 500, 1000].map(delay =>
+            setTimeout(() => {
+                if (visibleRef.current) editorRef.current?.focus?.();
+            }, delay),
+        );
+        return () => timers.forEach(clearTimeout);
     }, [editorReady]);
 
     React.useImperativeHandle(ref, () => ({

@@ -141,15 +141,16 @@ export const SettingsScreen = ({ navigation }: any) => {
                                 <Text style={styles.storageDesc} numberOfLines={1}>
                                     {settings.vault.vaultName}
                                 </Text>
+                                {settings.vault.vaultDirectoryUri && (
+                                    <Text style={styles.miniPathText} numberOfLines={2}>
+                                        {decodeURIComponent(settings.vault.vaultDirectoryUri)}
+                                    </Text>
+                                )}
                             </View>
                             <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
                         </View>
 
-                        {settings.vault.vaultDirectoryUri && (
-                            <Text style={styles.pathText}>
-                                {decodeURIComponent(settings.vault.vaultDirectoryUri)}
-                            </Text>
-                        )}
+
 
                         <TouchableOpacity
                             style={[styles.button, styles.buttonSecondary]}
@@ -416,6 +417,13 @@ const styles = StyleSheet.create({
         fontFamily: 'monospace',
         marginBottom: 16,
         textAlign: 'center',
+    },
+    miniPathText: {
+        fontSize: 11,
+        color: '#999',
+        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+        marginTop: 4,
+        ...RTL_TEXT_STYLE,
     },
     // ── Disconnect confirmation modal ────────────────────────────────────
     confirmBackdrop: {
